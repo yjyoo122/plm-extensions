@@ -38,6 +38,7 @@ if ((process.argv.length > 2) && (!fs.existsSync(pathEnvironment))) {
     const plm         = require('./routes/plm');
     const vault       = require('./routes/pdm');
     const services    = require('./routes/services');
+    const setup       = require('./routes/setup');
     const { fchmodSync } = require('fs');
     const environment = require(pathEnvironment);
     const app         = express();
@@ -55,6 +56,7 @@ if ((process.argv.length > 2) && (!fs.existsSync(pathEnvironment))) {
     app.locals.adminClientSecret = process.env.ADMIN_CLIENT_SECRET || environment.adminClientSecret;
     app.locals.vaultGateway      = process.env.VAULT_GATEWAY       || environment.vaultGateway;
     app.locals.vaultName         = process.env.VAULT_NAME          || environment.vaultName;
+    app.locals.uiLanguage        = process.env.UI_LANGUAGE         || environment.uiLanguage || '';
     app.locals.tenantLink        = 'https://' + app.locals.tenant + '.autodeskplm360.net';
     app.locals.vaultGatewayLink  = (app.locals.vaultGateway === '') ? '' : 'https://' + app.locals.vaultGateway + '.vg.autodesk.com';
     app.locals.protocol          = process.env.PROTOCOL || app.locals.redirectUri.split('://')[0];
@@ -82,6 +84,7 @@ if ((process.argv.length > 2) && (!fs.existsSync(pathEnvironment))) {
     app.locals.server       = settings.server;
     app.locals.chrome       = settings.chrome;
     app.locals.colors       = settings.colors;
+    app.locals.i18n         = settings.i18n;
 
 
     // VIEW ENGINE SETUP
@@ -104,6 +107,8 @@ if ((process.argv.length > 2) && (!fs.existsSync(pathEnvironment))) {
     
     
     // ROUTING
+    app.use(setup.firstRunRedirect);
+    app.use('/setup', setup);
     app.use('/', landing);
     app.use('/plm', plm);
     app.use('/vault', vault);
@@ -146,6 +151,7 @@ function mergeSettings(master, custom) {
     mergeSettingsProperty(master, custom, 'menu');
     mergeSettingsProperty(master, custom, 'server');
     mergeSettingsProperty(master, custom, 'chrome');
+    mergeSettingsProperty(master, custom, 'i18n');
 
 }
 function mergeSettingsProperty(master, custom, property) {

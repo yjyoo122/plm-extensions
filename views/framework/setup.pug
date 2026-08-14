@@ -1,0 +1,241 @@
+doctype html
+html
+    head
+
+        title= title
+
+        meta(name='viewport' content='width=device-width, minimum-scale=1.0, initial-scale=1.0')
+        meta(charset='utf-8')
+        link(rel='icon', href='/favicon.ico')
+
+        link(rel='stylesheet', href='/stylesheets/framework/basic.css')
+        link(rel='stylesheet', href='/stylesheets/framework/colors.css')
+        link(rel='stylesheet', href='/stylesheets/framework/fonts.css')
+        link(rel='stylesheet', href='/stylesheets/framework/setup.css')
+        link(rel='stylesheet', href='/stylesheets/framework/i18n.css')
+
+        script(src='/javascripts/libs/jquery-3.6.1.min')
+
+        script.
+            theme='#{theme}'
+            window.PLMX_I18N_DEFAULT='#{uiLanguage}'
+
+        script(src='/i18n/dictionaries.js')
+        script(src='/javascripts/framework/i18n.js')
+        script(src='/javascripts/framework/setup.js')
+
+    body
+
+        #wrapper.surface-level-2
+
+            #header
+                #header-title Setup Wizard
+                #header-subtitle Connect this server to your Fusion Manage tenant. Nothing has to be edited by hand.
+                #header-state
+
+            #layout
+
+                #steps
+                    .step(data-step='1')
+                        .step-number 1
+                        .step-label Create your APS app
+                    .step(data-step='2')
+                        .step-number 2
+                        .step-label Connect
+                    .step(data-step='3')
+                        .step-number 3
+                        .step-label Preferences
+                    .step(data-step='4')
+                        .step-number 4
+                        .step-label Optional advanced
+                    .step(data-step='5')
+                        .step-number 5
+                        .step-label Test and discover
+                    .step(data-step='6')
+                        .step-number 6
+                        .step-label Save and restart
+
+                #panels
+
+                    .panel(data-step='1')
+
+                        h1 Create your APS app
+
+                        p This server signs you in to Fusion Manage through an Autodesk Platform Services application. You only have to create it once, and you can do it yourself in about two minutes.
+
+                        ol
+                            li
+                                | Open the
+                                a#link-aps(href='https://aps.autodesk.com/myapps/create' target='_blank' rel='noopener')  APS application creation page
+                                |  and sign in with your Autodesk account.
+                            li
+                                | Choose the application type
+                                span.emphasis  Desktop, Mobile, Single-Page App
+                                | . This type cannot be changed later, so please pick it carefully.
+                            li Give the app any name you like, for example "Fusion Manage UX Server".
+                            li Paste the callback URL below into the field named Callback URL. It has to match character by character.
+                            li Create the app, then copy its Client ID. You will paste it in the next step.
+
+                        .field-block
+                            .field-label Callback URL to paste into your APS app
+                            .field-row
+                                input#callback-display.readonly(type='text' readonly='readonly')
+                                .button#copy-callback Copy
+                            .field-hint This value is built from the address this server is listening on. You can change it in the next step if port 8080 is already taken on your machine.
+
+                        h2 Whitelist the Client ID in Fusion Manage
+
+                        p Your tenant only accepts logins from Client IDs an administrator has approved. Open the general settings of your tenant, find the list of allowed Client IDs (it can also be labelled Forge Client IDs or APS Client IDs) and add the Client ID of the app you just created.
+
+                        .field-block
+                            .field-row
+                                a#link-settings.button.disabled(target='_blank' rel='noopener') Open the General Settings of my tenant
+                            .field-hint#hint-settings Enter your tenant name in the next step to activate this link.
+
+                        .panel-buttons
+                            .button.primary(data-goto='2') Next
+
+                    .panel(data-step='2')
+
+                        h1 Connect
+
+                        p These two values are all this server needs to reach your tenant.
+
+                        .field-block
+                            .field-label Tenant
+                            input#tenant(type='text' placeholder='mytenant' spellcheck='false' autocomplete='off')
+                            .field-hint You can type the short name, for example mytenant, or paste the full address https://mytenant.autodeskplm360.net. The wizard keeps the short name.
+                            .field-error#error-tenant
+
+                        .field-block
+                            .field-label Client ID
+                            input#client-id(type='text' placeholder='Paste the Client ID of your APS app' spellcheck='false' autocomplete='off')
+                            .field-hint This is the Client ID from step 1. It is not a password and it is stored in plain text in your connection settings.
+                            .field-error#error-client-id
+
+                        .field-block
+                            .field-label Callback URL
+                            input#redirect-uri(type='text' spellcheck='false' autocomplete='off')
+                            .field-hint Leave this as it is unless port 8080 is already used by another program. It has to end with /callback and it has to be identical to the Callback URL of your APS app.
+                            .field-error#error-redirect-uri
+
+                        .panel-buttons
+                            .button(data-goto='1') Back
+                            .button.primary#next-connect(data-goto='3') Next
+
+                    .panel(data-step='3')
+
+                        h1 Preferences
+
+                        .field-block
+                            .field-label Default theme
+                            select#default-theme
+                                option(value='light') Light
+                                option(value='dark') Dark
+                                option(value='black') Black
+                                option(value='fusion') Fusion
+                            .field-hint Every user can still switch the theme by adding &theme=light to any address.
+
+                        .field-block
+                            .field-label User interface language
+                            select#ui-language
+                                option(value='') Follow the browser language
+                                option(value='en') English
+                                option(value='ja') 日本語
+                                option(value='ko') 한국어
+                            .field-hint This becomes the default language of the user interface for everybody using this server.
+
+                        .panel-buttons
+                            .button(data-goto='2') Back
+                            .button.primary(data-goto='4') Next
+
+                    .panel(data-step='4')
+
+                        h1 Optional advanced settings
+
+                        p You can safely skip this whole step. Everything here stays empty for most installations.
+
+                        .disclosure#disclosure-advanced
+                            .disclosure-title#toggle-advanced Show the optional settings
+                            .disclosure-content#content-advanced
+
+                                h2 Second APS app for the admin utilities
+
+                                p Only the Outstanding Work Report and the User Settings Manager need this, because they read data on behalf of other users. It has to be a second APS app of a server to server type, which issues a Client Secret.
+
+                                .field-block
+                                    .field-label Admin Client ID
+                                    input#admin-client-id(type='text' spellcheck='false' autocomplete='off')
+                                    .field-error#error-admin-client-id
+
+                                .field-block
+                                    .field-label Admin Client Secret
+                                    input#admin-client-secret(type='password' autocomplete='new-password')
+                                    .field-hint Treat this like a password. It is written to your connection settings file and is never sent back to this page again.
+                                    .field-error#error-admin-client-secret
+
+                                h2 Vault connection
+
+                                p Only needed when you use the Vault and Inventor addins of this server. The standard applications never talk to Vault.
+
+                                .field-block
+                                    .field-label Vault Gateway
+                                    input#vault-gateway(type='text' spellcheck='false' autocomplete='off')
+                                    .field-error#error-vault-gateway
+
+                                .field-block
+                                    .field-label Vault Name
+                                    input#vault-name(type='text' spellcheck='false' autocomplete='off')
+                                    .field-error#error-vault-name
+
+                        .panel-buttons
+                            .button(data-goto='3') Back
+                            .button.primary(data-goto='5') Next
+
+                    .panel(data-step='5')
+
+                        h1 Test and discover
+
+                        h2 Is the tenant reachable?
+
+                        p This only checks that the address of your tenant exists and answers. It does not sign you in yet.
+
+                        .field-block
+                            .field-row
+                                .button#check-tenant Check the tenant address
+                            .field-message#result-tenant
+
+                        h2 Which workspaces does your tenant have?
+
+                        p The applications need the numeric id of each workspace, for example the id of your Items workspace. The wizard reads the list of workspaces from your tenant and matches it against the names the applications expect. Reading that list requires you to be signed in.
+
+                        .field-block
+                            .field-row
+                                .button#sign-in Sign in to Autodesk
+                                .button.primary#discover Discover workspaces
+                            .field-message#result-auth
+                            .field-message#result-discover
+
+                        #workspace-table
+
+                        .panel-buttons
+                            .button(data-goto='4') Back
+                            .button.primary(data-goto='6') Next
+
+                    .panel(data-step='6')
+
+                        h1 Save and restart
+
+                        p The wizard writes your answers into the connection settings and the workspace ids into the settings file. A timestamped backup of every file it overwrites is kept next to the original.
+
+                        #summary
+
+                        .field-block
+                            .field-row
+                                .button.primary#save Save and restart
+                            .field-message#result-save
+
+                        #restart-info
+
+                        .panel-buttons
+                            .button(data-goto='5') Back

@@ -17,3 +17,5 @@ package-lock.json
 !.gitkeep
 .DS_Store*
 run.sh
+environment.backup-*.js
+/dist
