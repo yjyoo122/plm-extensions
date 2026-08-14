@@ -1,0 +1,153 @@
+/*  LANGUAGE SWITCHER AND CJK TYPOGRAPHY
+    -----------------------------------------------------------------------------
+    Styling for the control injected by /javascripts/framework/i18n.js. Everything
+    reuses the existing custom properties from colors.css and styles.css so that
+    the light, dark, black and fusion themes are supported without new colors.
+    ----------------------------------------------------------------------------- */
+
+
+/*  CJK TYPOGRAPHY */
+/* ----------------------------------------------------------------------------- */
+/*  ArtifaktElement carries no japanese or korean glyphs. The lang attribute is set
+    by the engine only while a translation is active, so the default appearance of
+    the applications is untouched when the user interface stays in english. */
+
+html[lang='ja'] body,
+html[lang='ko'] body,
+html[lang='ja'] input,
+html[lang='ko'] input,
+html[lang='ja'] select,
+html[lang='ko'] select,
+html[lang='ja'] textarea,
+html[lang='ko'] textarea,
+html[lang='ja'] button,
+html[lang='ko'] button {
+    font-family : 'ArtifaktElement', 'Yu Gothic UI', 'Meiryo', 'Malgun Gothic', 'Noto Sans JP', 'Noto Sans KR', sans-serif;
+}
+
+html[lang='ja'] body,
+html[lang='ko'] body {
+    font-feature-settings : 'palt' 1;
+}
+
+/*  keep the icon fonts untouched */
+html[lang='ja'] .button.icon,
+html[lang='ko'] .button.icon,
+html[lang='ja'] [class*='icon-']::before,
+html[lang='ko'] [class*='icon-']::before {
+    font-family : 'Material Symbols Sharp';
+}
+
+
+/*  SWITCHER ON THE LANDING PAGE - APPENDED TO THE THEME SELECTOR ROW */
+/* ----------------------------------------------------------------------------- */
+/*  #themes is a flex row already providing 'span' and 'select' rules, the control
+    therefore inherits the look of the theme selector automatically. The side panel is
+    only 360px wide, so the language pair is put on a line of its own instead of
+    sharing the line with the theme selector - both would end up too narrow to read. */
+
+#themes {
+    flex-wrap : wrap;
+}
+
+#themes > .uilang-row {
+    display       : flex;
+    flex-basis    : 100%;
+    line-height   : 38px;
+    margin-top    : var(--spacer-xs, 8px);
+    padding-right : 0px;
+}
+
+select#uilang-selector {
+    font-size : 14px;
+}
+
+select#uilang-selector > option {
+    background : var(--color-surface-level-1, #ffffff);
+    color      : var(--color-font, #000000);
+}
+
+
+/*  SWITCHER IN THE APPLICATION HEADER AND AS A FLOATING FALLBACK */
+/* ----------------------------------------------------------------------------- */
+
+.uilang-control {
+    display  : block;
+    position : relative;
+}
+
+.uilang-control > .uilang-button {
+    font-size   : 14px;
+    min-width   : 64px;
+    padding     : 6px 12px;
+    user-select : none;
+}
+
+#header-toolbar > .uilang-control > .uilang-button {
+    margin-top : 4px;
+}
+
+.fusion-theme #header-toolbar > .uilang-control > .uilang-button {
+    margin-top     : 0px;
+    padding-top    : 4px;
+    padding-bottom : 4px;
+}
+
+.uilang-control > .uilang-menu {
+    background    : var(--color-surface-level-1, #ffffff);
+    border        : 1px solid var(--color-surface-level-4, #d9d9d9);
+    border-radius : 2px;
+    box-shadow    : var(--box-shadow, 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19));
+    color         : var(--color-font, #000000);
+    display       : none;
+    min-width     : 140px;
+    padding       : var(--spacer-xxs, 4px) 0px;
+    position      : absolute;
+    right         : 0px;
+    top           : 100%;
+    z-index       : 90;
+}
+
+.fusion-theme .uilang-control > .uilang-menu {
+    border-radius : 4px;
+    border-color  : rgba(34, 36, 38, 0.15);
+}
+
+.uilang-control.uilang-open > .uilang-menu {
+    display : block;
+}
+
+.uilang-menu > .uilang-option {
+    cursor      : pointer;
+    font-size   : 14px;
+    font-weight : 400;
+    line-height : 20px;
+    padding     : var(--spacer-xs, 8px) var(--spacer-m, 16px);
+    text-align  : left;
+    white-space : nowrap;
+}
+
+.uilang-menu > .uilang-option:hover {
+    background : var(--color-hover-background, #e1f2fa);
+}
+
+.uilang-menu > .uilang-option.selected {
+    background  : var(--color-selected-background, #b9e1f4);
+    font-weight : 600;
+}
+
+.dark-theme  .uilang-menu > .uilang-option.selected,
+.black-theme .uilang-menu > .uilang-option.selected {
+    color : #ffffff;
+}
+
+#uilang-floating {
+    position : fixed;
+    top      : var(--spacer-xs, 8px);
+    right    : var(--spacer-xs, 8px);
+    z-index  : 90;
+}
+
+#uilang-floating > .uilang-control > .uilang-button {
+    box-shadow : var(--box-shadow, 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19));
+}

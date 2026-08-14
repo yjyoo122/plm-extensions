@@ -153,3 +153,22 @@ exports.server = {
 exports.chrome = {
     customStyle : true
 }
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------------
+//  CUSTOM USER INTERFACE LANGUAGE SETTINGS
+// ---------------------------------------------------------------------------------------------------------------------------
+//  Per default, the user interface follows the language of the browser (Japanese, Korean or English).
+//  To force one single language for everybody, remove the two slashes in front of the four lines below and
+//  set defaultLanguage to 'ja' (Japanese), 'ko' (Korean) or 'en' (English). Restart the server afterwards.
+//  If you do not need skipSelectors, simply delete that line - and the comma at the end of the line above it.
+//
+//  Sometimes a value coming from Fusion Manage looks exactly like a label of the user interface - for example
+//  an item titled 'Details' or a lifecycle called 'Released'. Such a value would get translated as well, which
+//  is not wanted. skipSelectors is the escape hatch for this: list the CSS selectors of the elements holding
+//  your data and everything inside them stays in its original language.
+// exports.i18n = {
+//     defaultLanguage : 'ja',
+//     skipSelectors   : ['.item-title', '.field-value']
+// }

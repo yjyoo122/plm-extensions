@@ -13,6 +13,8 @@ html
         link(rel='stylesheet', href='/stylesheets/framework/dialogs.css')
         link(rel='stylesheet', href='/stylesheets/framework/fonts.css')
         link(rel='stylesheet', href='/stylesheets/framework/styles.css')
+        unless i18n && i18n.enabled === false
+            link(rel='stylesheet', href='/stylesheets/framework/i18n.css')
         
         link(rel='stylesheet', href='/stylesheets/contents/item.css')
         link(rel='stylesheet', href='/stylesheets/contents/nav.css')
@@ -27,6 +29,13 @@ html
     
         script(src='https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js') 
         script(src='/javascripts/libs/jquery-3.6.1.min')
+        unless i18n && i18n.enabled === false
+            script.
+                window.PLMX_I18N_DEFAULT=!{JSON.stringify(uiLanguage || (i18n && i18n.defaultLanguage) || '')}
+                window.PLMX_I18N_SKIP=!{JSON.stringify((i18n && i18n.skipSelectors) || [])}
+                window.PLMX_I18N_SETTINGS=!{JSON.stringify(i18n || {})}
+            script(src='/i18n/dictionaries.js')
+            script(src='/javascripts/framework/i18n.js')
 
         script(src='/javascripts/framework/utils.js')
         script(src='/javascripts/contents/viewer.js')

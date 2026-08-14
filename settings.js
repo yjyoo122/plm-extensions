@@ -1912,3 +1912,26 @@ exports.colors = {
     }
 
 }
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------------
+//  USER INTERFACE LANGUAGES
+// ---------------------------------------------------------------------------------------------------------------------------
+// Translates the labels, tooltips and messages of all applications into Japanese or Korean at runtime.
+// The translations are stored in /public/i18n/ja.json and /public/i18n/ko.json. Translation only replaces text
+// that matches a dictionary entry as a whole - but a value coming from Fusion Manage that exactly equals a UI
+// label (i.e. an item named 'New') would match too. The skipSelectors list below excludes such data-bearing
+// regions; extend it in /settings/custom.js whenever you spot PLM data being translated.
+exports.i18n = {
+    enabled         : true,     // master switch; false = English only, zero runtime overhead
+    defaultLanguage : '',       // '', 'en', 'ja' or 'ko'. Blank = follow the browser
+    showSwitcher    : true,     // show the language selector in the header / landing page
+    skipSelectors   : [         // CSS selectors whose contents must never be translated (PLM data regions)
+        '.item-title',
+        '.item-code',
+        '.tree-column-make_or_buy',
+        '#workspace option'
+    ],
+    collectMissing  : true      // record untranslated strings for plmxI18n.exportMissing()
+}
