@@ -84,7 +84,12 @@
     let SKIP_DEFAULT = ['[data-i18n-skip]', '.no-translate', '.notranslate', '[translate=no]'];
     let FORCE_SELECT = '[data-i18n-force]';
     let MIN_LENGTH   = 2;
-    let MAX_LENGTH   = 200;
+    /*  Upper bound on the text a node may hold before it is ignored. The bound only
+        exists so that huge blobs of data never reach the dictionary, the lookup itself
+        is a single map hit and does not get slower with length. It has to stay above
+        the longest translated string, otherwise that entry is silently dead - the
+        landing page and the wizard both carry paragraphs beyond 300 characters. */
+    let MAX_LENGTH   = 600;
     let MAX_WARNINGS = 20;
     let MAX_PENDING  = 20000;
     let MAX_MISSING  = 5000;

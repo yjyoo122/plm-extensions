@@ -91,8 +91,9 @@ function getSystemAdminSession(callback) {
             $.get('/plm/login-admin', {}, function (response) {
                 if(response.error) {
                     showStartupError({
-                        title   : 'System Admin access required',
-                        details : 'Failed to login with system admin privileges. Please review the Admin Client ID and Admin Client Secret in your environments file.',
+                        title        : 'System Admin access required',
+                        details      : 'This application signs in as the system administrator of your tenant. That needs a second APS application with a Client ID and a Client Secret, and those two values are missing or were not accepted.',
+                        instructions : '<a href="/setup" target="_blank">Open the setup wizard</a>. Go to step 4, Optional advanced, and enter the Admin Client ID and the Admin Client Secret there.<br>Use the test button to check them before saving. Only this application and the Outstanding Work Report need them.',
                     });
                 } else {
                     $('#startup').fadeOut();

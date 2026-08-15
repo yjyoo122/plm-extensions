@@ -1,0 +1,31 @@
+/*  IN-APP ACCESS TO THE SETUP WIZARD
+    -----------------------------------------------------------------------------
+    Styling for the control injected by /javascripts/framework/setup-link.js and for
+    the matching entry of the landing page. The button itself reuses the existing
+    .button.icon.icon-settings conventions of styles.css and fonts.css, so the light,
+    dark, black and fusion themes are supported without adding any color here.
+    ----------------------------------------------------------------------------- */
+
+
+/*  CONTROL IN THE APPLICATION HEADER */
+/* ----------------------------------------------------------------------------- */
+/*  The gear button sits inside a wrapper which does not carry the class 'button' :
+    several applications address their own header buttons with
+    $('#header-toolbar').children('.button') and trigger .first().click() on them.
+    The wrapper is a flex item of #header-toolbar and behaves exactly like the
+    .uilang-control of the language switcher next to it. */
+
+.setup-link-control {
+    display  : block;
+    position : relative;
+}
+
+
+/*  ENTRY OF THE LANDING PAGE */
+/* ----------------------------------------------------------------------------- */
+/*  #side-toolbar is a two column grid. This entry is the fifth one and would leave
+    an empty cell next to it, so it spans the full width of the side panel. */
+
+#side-toolbar > #setup-link-landing {
+    grid-column : 1 / -1;
+}

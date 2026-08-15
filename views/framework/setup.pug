@@ -32,6 +32,7 @@ html
                 #header-title Setup Wizard
                 #header-subtitle Connect this server to your Fusion Manage tenant. Nothing has to be edited by hand.
                 #header-state
+                #header-profile.field-hint
 
             #layout
 
@@ -161,11 +162,42 @@ html
 
                                 h2 Second APS app for the admin utilities
 
-                                p Only the Outstanding Work Report and the User Settings Manager need this, because they read data on behalf of other users. It has to be a second APS app of a server to server type, which issues a Client Secret.
+                                p
+                                    | Two of the applications on this server work on behalf of other people: the
+                                    span.emphasis  Outstanding Work Report
+                                    | , which lists the open tasks of everybody, and the
+                                    span.emphasis  User Settings Manager
+                                    | , which copies saved workspace views from one user to other users. Every other application here runs without anything on this page.
+
+                                p
+                                    | To act as somebody else, this server has to sign in as itself instead of as you. That needs a
+                                    span.emphasis  second APS app
+                                    | , in addition to the one you created in step 1, and it has to be of a type which issues a Client Secret. The app from step 1 is of a type that has no Client Secret at all, so it cannot be reused here.
+
+                                p
+                                    span.emphasis Please read this before you fill it in.
+                                    |  A Client Secret lets this server read and write as any user of your tenant, without that user ever logging in.
+
+                                p Please only provide it while you actually use these two utilities, and clear both fields again afterwards.
+
+                                ol
+                                    li
+                                        | Open the
+                                        a#link-aps-admin(href='https://aps.autodesk.com/myapps/create' target='_blank' rel='noopener')  APS application creation page
+                                        |  a second time and sign in with your Autodesk account.
+                                    li
+                                        | Choose the application type
+                                        span.emphasis  Server-to-Server
+                                        | . This is the type which issues a Client Secret. This type cannot be changed later, so please pick it carefully.
+                                    li Give this app a name which tells it apart from the first one, for example "Fusion Manage UX Admin".
+                                    li Create the app, then copy its Client ID and its Client Secret. This is the only moment the Client Secret is shown, so copy it right away.
+                                    li Add this second Client ID to the allowed Client IDs of your tenant as well, in the same general settings you used in step 1.
+                                    li Paste both values below and let the wizard test them.
 
                                 .field-block
                                     .field-label Admin Client ID
-                                    input#admin-client-id(type='text' spellcheck='false' autocomplete='off')
+                                    input#admin-client-id(type='text' placeholder='Paste the Client ID of your second APS app' spellcheck='false' autocomplete='off')
+                                    .field-hint This is the Client ID of the second app. It must be a different value than the Client ID in step 2.
                                     .field-error#error-admin-client-id
 
                                 .field-block
@@ -173,6 +205,12 @@ html
                                     input#admin-client-secret(type='password' autocomplete='new-password')
                                     .field-hint Treat this like a password. It is written to your connection settings file and is never sent back to this page again.
                                     .field-error#error-admin-client-secret
+
+                                .field-block
+                                    .field-row
+                                        .button#test-admin Test these credentials
+                                    .field-hint The wizard asks Autodesk for a server token with these two values, exactly as the two utilities do. Nothing is saved by the test and the Client Secret is never written to the console.
+                                    .field-message#result-admin
 
                                 h2 Vault connection
 
@@ -229,6 +267,31 @@ html
                         p The wizard writes your answers into the connection settings and the workspace ids into the settings file. A timestamped backup of every file it overwrites is kept next to the original.
 
                         #summary
+
+                        .field-block
+                            .field-label Where should this be saved?
+                            .field-row
+                                input#save-mode-current(type='radio' name='save-mode' value='current' checked='checked')
+                                label(for='save-mode-current') Update the settings this server is running on
+                            .field-hint Use this while you are completing or correcting the settings of the tenant you are working with. The server restarts by itself and comes back on the new settings.
+                            .field-row
+                                input#save-mode-profile(type='radio' name='save-mode' value='profile')
+                                label(for='save-mode-profile') Save as a new tenant profile
+                            .field-hint A tenant profile keeps a second tenant next to this one. From then on the launcher asks which tenant to start with. Nothing about the tenant this server runs on right now is changed, and the server does not restart.
+
+                        #profile-block
+
+                            .field-block
+                                .field-label Name of the tenant profile
+                                input#profile-name(type='text' placeholder='tokyo-demo' spellcheck='false' autocomplete='off')
+                                .field-hint Letters a to z, digits, dashes and underscores only. It becomes the name of two files and the entry you pick in the launcher menu, so a name like tokyo-demo or customer-abc reads well there.
+                                .field-error#error-profile-name
+
+                            .field-message#profile-workspaces
+
+                            .field-block
+                                .field-label Tenant profiles on this server
+                                #profile-list
 
                         .field-block
                             .field-row

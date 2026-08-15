@@ -7,13 +7,52 @@ const fs      = require('fs');
 const os      = require('os');
 const path    = require('path');
 
-const pathRoot     = path.join(__dirname, '..');
-const pathSettings = path.join(pathRoot, 'settings');
+const pathRoot         = path.join(__dirname, '..');
+const pathSettings     = path.join(pathRoot, 'settings');
+const pathEnvironments = path.join(pathRoot, 'environments');
 
 const secretPlaceholder = '********';
 const rejectedChars     = /['"`\\\r\n\t]/;
 const themes            = ['light', 'dark', 'black', 'fusion'];
 const languages         = ['', 'en', 'ja', 'ko'];
+
+
+/* ------------------------------------------------------------------------------
+    TENANT PROFILES
+
+    A profile is a pair of files : environments/<name>.js holds the connection
+    settings of one tenant and points at settings/<name>.js, which holds the
+    workspace ids of that same tenant. The server is started with the profile
+    name as its only argument, the Windows launcher asks which one to use.
+
+    profileChars is the whole defence for the file name. Everything the wizard
+    is asked to write ends up as a path, so only letters, digits, dash and
+    underscore are let through - which leaves no way to express a path
+    separator, a parent folder, a leading dot or a trailing space.
+   ------------------------------------------------------------------------------ */
+const profileChars   = /^[A-Za-z0-9_-]+$/;
+const profileMaximum = 40;
+
+//  Names Windows refuses to use as a file name, with or without an extension.
+const reservedDevices = [
+    'con', 'prn', 'aux', 'nul',
+    'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+    'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'
+];
+
+//  Names this server uses for files of its own in the two folders a profile writes into.
+//  'template' is the documented example environment file, 'custom' the settings file every
+//  installation has and 'wizard' the fallback this wizard writes. A profile taking one of
+//  these names would overwrite a file that is not a tenant of the user.
+const reservedProfiles = ['template', 'custom', 'wizard', 'settings', 'environment', 'index', 'package'];
+
+/*  The endpoint, the grant and the scope below are the ones /plm/login-admin in routes/plm.js
+    uses to obtain the 2-legged token of the two admin utilities. They are repeated here because
+    that route can only ever test the values the server was STARTED with, while the wizard has to
+    test the values currently typed into the form, before anything is written to disk. Should the
+    request in routes/plm.js ever change, it has to be changed here as well.                     */
+const adminTokenUrl = 'https://developer.api.autodesk.com/authentication/v2/token';
+const adminScope    = 'profapi:img-profile:read';
 
 
 /* ------------------------------------------------------------------------------
@@ -185,7 +224,33 @@ router.get('/status', function(req, res, next) {
         supervised           : isSupervised(),
         environmentFile      : path.basename(getEnvironmentPath()),
         settingsFile         : blankToEmpty(locals.settings),
+        profile              : getActiveProfile(),
         port                 : port
+    });
+
+});
+
+
+/* ------------------------------------------------------------------------------
+    TENANT PROFILES
+
+    Lists the environment files in /environments so the wizard can show which
+    tenants are already set up and warn before a name is reused. template.js is
+    the shipped example and the timestamped backups are copies, neither is a
+    tenant of the user.
+
+    Every file is loaded to read its tenant out of it. A file with a typo in it
+    is reported as unreadable instead of taking this route down - the user needs
+    to be told about exactly that file, and the launcher refuses it as well.
+   ------------------------------------------------------------------------------ */
+router.get('/profiles', function(req, res, next) {
+
+    let active = getActiveProfile();
+
+    res.json({
+        active       : active,
+        usingDefault : (active === ''),
+        profiles     : listProfiles()
     });
 
 });
@@ -276,6 +341,183 @@ router.get('/check-tenant', function(req, res, next) {
 
 
 /* ------------------------------------------------------------------------------
+    ADMIN CREDENTIAL TEST
+
+    The OUTSTANDING WORK REPORT and the USER SETTINGS MANAGER ask Autodesk for a
+    2-legged token before they impersonate a user. This endpoint runs exactly that
+    request with the values currently typed into the wizard, so the user learns
+    whether the second APS app is usable BEFORE saving and restarting.
+
+    Nothing is written, nothing is remembered. The secret is never printed to the
+    console and never travels back to the browser - the response only ever carries
+    a verdict and a sentence explaining it.
+   ------------------------------------------------------------------------------ */
+router.post('/test-admin', function(req, res, next) {
+
+    console.log();
+    console.log('  /setup/test-admin');
+    console.log(' --------------------------------------------');
+
+    if(!isSameOriginRequest(req)) {
+        console.log('  rejected : the request did not come from the wizard page itself');
+        console.log();
+        return res.status(403).json({ success : false, code : 'origin', message : 'This request did not come from the setup wizard page. Please open http://localhost:' + (isBlank(req.app.locals.port) ? '8080' : req.app.locals.port) + '/setup and try again.' });
+    }
+
+    let locals   = req.app.locals;
+    let body     = (typeof req.body === 'undefined') ? {} : req.body;
+    let errors   = [];
+    let clientId = cleanText(body.adminClientId, 'Admin Client ID', errors);
+    let secret   = '';
+
+    // The page shows a mask instead of a stored secret, exactly like /save does. A mask
+    // therefore means "test the secret this server already has" and not "test this text".
+    if(typeof body.adminClientSecret === 'undefined') {
+        secret = blankToEmpty(locals.adminClientSecret);
+    } else if(String(body.adminClientSecret) === secretPlaceholder) {
+        secret = blankToEmpty(locals.adminClientSecret);
+    } else {
+        secret = cleanText(body.adminClientSecret, 'Admin Client Secret', errors);
+    }
+
+    if(errors.length > 0) {
+        console.log('  rejected : ' + errors.join(' | '));
+        console.log();
+        return res.json({ success : false, code : 'invalid', message : errors.join(' ') });
+    }
+
+    if(clientId === '') {
+        console.log('  rejected : no Admin Client ID provided');
+        console.log();
+        return res.json({ success : false, code : 'missing', message : 'Please provide the Admin Client ID of your second APS app before testing.' });
+    }
+
+    if(secret === '') {
+        console.log('  rejected : no Admin Client Secret provided');
+        console.log();
+        return res.json({ success : false, code : 'wrongtype', message : 'No Admin Client Secret was provided. These two utilities need an APS app of a server to server type, the only type which issues a Client Secret. The app type used in step 1 never has one.' });
+    }
+
+    if(clientId === blankToEmpty(locals.clientId)) {
+        console.log('  rejected : the Admin Client ID equals the Client ID of the normal login');
+        console.log();
+        return res.json({ success : false, code : 'wrongtype', message : 'This is the same Client ID this server already uses to sign users in. That app has no Client Secret at all. Please create a second APS app of a server to server type and use its Client ID here.' });
+    }
+
+    console.log('  adminClientId     = ' + clientId.substring(0, 8) + '...');
+    console.log('  adminClientSecret = (provided, not printed)');
+
+    axios.post(adminTokenUrl, 'grant_type=client_credentials&scope=' + encodeURIComponent(adminScope), {
+        timeout        : 20000,
+        headers        : {
+            'accept'        : 'application/json',
+            'authorization' : 'Basic ' + Buffer.from(clientId + ':' + secret).toString('base64'),
+            'content-type'  : 'application/x-www-form-urlencoded'
+        },
+        validateStatus : function() { return true; }
+    }).then(function(response) {
+
+        let result = describeAdminToken(response);
+
+        console.log('  http status       = ' + response.status);
+        console.log('  result            = ' + result.code);
+        console.log();
+
+        res.json(result);
+
+    }).catch(function(error) {
+
+        // Only the error CODE gets printed on purpose : the full axios error object carries
+        // the request configuration, and that configuration contains the Basic header.
+        let result = describeAdminFailure(error);
+
+        console.log('  transport error   = ' + blankToEmpty(error.code));
+        console.log('  result            = ' + result.code);
+        console.log();
+
+        res.json(result);
+
+    });
+
+});
+function describeAdminToken(response) {
+
+    let status = (typeof response.status === 'undefined') ? 0 : response.status;
+    let data   = ((typeof response.data === 'undefined') || (response.data === null)) ? {} : response.data;
+    let code   = (typeof data === 'object') ? blankToEmpty(data.error) : '';
+    let detail = (typeof data === 'object') ? blankToEmpty(data.error_description) : '';
+
+    if((status === 200) && (typeof data === 'object') && !isBlank(data.access_token)) {
+        return {
+            success : true,
+            code    : 'ok',
+            message : 'These credentials work. Autodesk issued a server token for them, so the Outstanding Work Report and the User Settings Manager will be able to run once you save and restart.'
+        };
+    }
+
+    if((code === 'unsupported_grant_type') || (code === 'invalid_grant') || (code === 'invalid_scope')) {
+        return {
+            success : false,
+            code    : 'wrongtype',
+            message : 'Autodesk refuses to issue a server token for this app, which means it is not of a server to server type. Please create a second APS app of a server to server type and use its two values here.'
+        };
+    }
+
+    if((status === 401) || (status === 403) || (code === 'invalid_client')) {
+        return {
+            success : false,
+            code    : 'rejected',
+            message : 'Autodesk did not accept this pair of values. Please copy the Client ID and the Client Secret again, both from the same app. An app without a Client Secret of its own cannot be used here.'
+        };
+    }
+
+    if(status >= 500) {
+        return {
+            success : false,
+            code    : 'service',
+            message : 'The Autodesk authentication service answered with an error (HTTP ' + status + '). Your values were not checked. Please try again in a few minutes.'
+        };
+    }
+
+    return {
+        success : false,
+        code    : 'unexpected',
+        message : 'The Autodesk authentication service answered with HTTP ' + status + (isBlank(detail) ? '' : ' : ' + detail) + '. Please check both values and try again.'
+    };
+
+}
+function describeAdminFailure(error) {
+
+    let code    = blankToEmpty(error.code).toUpperCase();
+    let timeout = ['ECONNABORTED', 'ETIMEDOUT', 'ERR_CANCELED'];
+    let offline = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'EHOSTUNREACH', 'EPROTO', 'ERR_TLS_CERT_ALTNAME_INVALID', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT'];
+
+    if(timeout.indexOf(code) > -1) {
+        return {
+            success : false,
+            code    : 'timeout',
+            message : 'Autodesk did not answer within 20 seconds, so your values could not be checked. A proxy or a firewall is probably blocking developer.api.autodesk.com. You can still save and test the utilities later.'
+        };
+    }
+
+    if(offline.indexOf(code) > -1) {
+        return {
+            success : false,
+            code    : 'offline',
+            message : 'This machine could not reach developer.api.autodesk.com, so your values could not be checked. Please check the internet connection, a proxy or a firewall. You can still save and test later.'
+        };
+    }
+
+    return {
+        success : false,
+        code    : 'failed',
+        message : 'The test could not be run on this machine' + (isBlank(code) ? '' : ' (' + code + ')') + '. Your values were not checked. You can still save your settings and test the two utilities later.'
+    };
+
+}
+
+
+/* ------------------------------------------------------------------------------
     SAVE CONFIGURATION & RESTART
    ------------------------------------------------------------------------------ */
 router.post('/save', function(req, res, next) {
@@ -349,6 +591,10 @@ router.post('/save', function(req, res, next) {
 
     let ids = readWorkspaceIds(body.workspaceIds, errors);
 
+    //  Two places to save to : over the configuration this server is running on, which is what the
+    //  wizard has always done, or into a new pair of files describing another tenant.
+    let profile = (String(blankToEmpty(body.saveMode)) === 'profile') ? readProfileName(body.profileName, errors) : '';
+
     if(errors.length > 0) {
         console.log('  rejected : ' + errors.join(' | '));
         console.log();
@@ -357,6 +603,8 @@ router.post('/save', function(req, res, next) {
 
     let files    = [];
     let warnings = [];
+
+    if(profile !== '') return saveProfile(req, res, values, ids, profile, files, warnings);
 
     try {
 
@@ -438,9 +686,258 @@ router.post('/save', function(req, res, next) {
 
 
 /* ------------------------------------------------------------------------------
+    SAVING A NEW TENANT PROFILE
+
+    Writes the pair of files a profile consists of and leaves the running server
+    completely alone : it is still connected to the tenant it was started with,
+    and restarting it would only bring the very same tenant back. The page says
+    so and points at the launcher, which is where a profile is chosen.
+   ------------------------------------------------------------------------------ */
+function saveProfile(req, res, values, ids, profile, files, warnings) {
+
+    let locals      = req.app.locals;
+    let body        = (typeof req.body === 'undefined') ? {} : req.body;
+    let pathProfile = path.join(pathEnvironments, profile + '.js');
+    let pathCustom  = path.join(pathSettings, profile + '.js');
+    let existing    = [];
+
+    if(fs.existsSync(pathProfile)) existing.push('environments/' + profile + '.js');
+    if(fs.existsSync(pathCustom))  existing.push('settings/' + profile + '.js');
+
+    if((existing.length > 0) && !readFlag(body.overwriteProfile, false)) {
+
+        console.log('  rejected : the profile ' + profile + ' exists already and replacing it was not confirmed');
+        console.log();
+
+        return res.status(409).json({
+            success       : false,
+            profileExists : true,
+            profileName   : profile,
+            existingFiles : existing,
+            errors        : ['A tenant profile named ' + profile + ' exists already.']
+        });
+
+    }
+
+    /*  Workspace ids are numbered per tenant : the id of the Items workspace in one tenant means
+        nothing at all in the next one. The ids sitting on the page were read from the tenant this
+        server is connected to right now, so they may only be carried over into a profile that
+        describes that very tenant. For every other tenant all ids are written as 0, which the
+        applications skip, and the page tells the user to run the discovery after switching.      */
+    let sameTenant = (values.tenant !== '') && (values.tenant === blankToEmpty(locals.tenant));
+    let discovered = ((ids !== null) && sameTenant);
+    let profileIds = discovered ? ids : zeroWorkspaceIds();
+
+    if(!discovered) {
+        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0, because workspace ids are different in every tenant and this server is not connected to ' + values.tenant + '. Start the app again, choose ' + profile + ' in the launcher, then open this wizard and run the workspace discovery.');
+    }
+
+    values.settings = profile + '.js';
+
+    try {
+
+        let base     = fs.existsSync(path.join(pathSettings, 'custom.js'));
+        let previous = fs.existsSync(pathCustom) ? fs.readFileSync(pathCustom, 'utf8') : undefined;
+
+        backupFile(pathCustom, files);
+        fs.writeFileSync(pathCustom, matchLineEndings(renderProfileSettings(profileIds, profile, base, discovered), previous), 'utf8');
+
+        //  Loaded back from where it belongs and not from a temporary folder like isLoadable does :
+        //  the generated file requires ./custom.js, which only resolves next to the real file.
+        if(!isLoadableFile(pathCustom)) throw new Error('the generated file could not be loaded back');
+
+        files.push('settings/' + profile + '.js');
+
+    } catch(error) {
+
+        console.log('  ERROR writing settings/' + profile + '.js : ' + error.message);
+        console.log();
+
+        return res.status(500).json({ success : false, errors : ['The workspace ids of the profile could not be written : ' + error.message] });
+
+    }
+
+    try {
+
+        let previous = fs.existsSync(pathProfile) ? fs.readFileSync(pathProfile, 'utf8') : undefined;
+        let contents = matchLineEndings(renderEnvironment(values, profile), previous);
+
+        if(!isLoadable(contents)) throw new Error('the generated file could not be validated');
+
+        backupFile(pathProfile, files);
+        fs.writeFileSync(pathProfile, contents, 'utf8');
+        files.push('environments/' + profile + '.js');
+
+    } catch(error) {
+
+        console.log('  ERROR writing environments/' + profile + '.js : ' + error.message);
+        console.log();
+
+        return res.status(500).json({ success : false, errors : ['The connection settings of the profile could not be written : ' + error.message] });
+
+    }
+
+    console.log('  profile      = ' + profile);
+    console.log('  tenant       = ' + values.tenant);
+    console.log('  clientId     = ' + values.clientId.substring(0, 8) + '...');
+    console.log('  redirectUri  = ' + values.redirectUri);
+    console.log('  settings     = settings/' + values.settings);
+    console.log('  workspaceIds = ' + (discovered ? 'taken from the discovery of this tenant' : 'all written as 0, discovery is still to be run'));
+    console.log('  files        = ' + files.join(', '));
+    console.log();
+
+    res.json({
+        success           : true,
+        savedProfile      : profile,
+        workspaceIdsSaved : discovered,
+        supervised        : isSupervised(),
+        restarting        : false,
+        files             : files,
+        warnings          : warnings
+    });
+
+}
+
+
+/* ------------------------------------------------------------------------------
+    PROFILE HELPERS
+   ------------------------------------------------------------------------------ */
+function getActiveProfile() {
+
+    if(process.argv.length < 3) return '';
+
+    let file = String(process.argv[2]);
+
+    if(file.toLowerCase().endsWith('.js')) file = file.substring(0, file.length - 3);
+
+    return file;
+
+}
+function listProfiles() {
+
+    let profiles = [];
+    let active   = getActiveProfile().toLowerCase();
+
+    if(!fs.existsSync(pathEnvironments)) return profiles;
+
+    for(let file of fs.readdirSync(pathEnvironments)) {
+
+        let lower = file.toLowerCase();
+
+        if(!lower.endsWith('.js'))         continue;
+        if(lower === 'template.js')        continue;
+        if(lower.indexOf('.backup-') > -1) continue;
+
+        let name   = file.substring(0, file.length - 3);
+        let loaded = readEnvironmentFile(path.join(pathEnvironments, file));
+        let uses   = (loaded === null) ? '' : blankToEmpty(loaded.settings);
+
+        profiles.push({
+            name           : name,
+            file           : 'environments/' + file,
+            tenant         : (loaded === null) ? '' : blankToEmpty(loaded.tenant),
+            settings       : uses,
+            settingsExists : (uses !== '') && fs.existsSync(path.join(pathSettings, uses)),
+            readable       : (loaded !== null),
+            active         : (name.toLowerCase() === active)
+        });
+
+    }
+
+    profiles.sort(function(a, b) {
+        return String(a.name).localeCompare(String(b.name));
+    });
+
+    return profiles;
+
+}
+function readEnvironmentFile(pathFile) {
+
+    try {
+
+        let loaded = require(pathFile);
+
+        delete require.cache[require.resolve(pathFile)];
+
+        return loaded;
+
+    } catch(error) {
+
+        return null;
+
+    }
+
+}
+function isLoadableFile(pathFile) {
+
+    try {
+
+        require(pathFile);
+
+        delete require.cache[require.resolve(pathFile)];
+
+        return true;
+
+    } catch(error) {
+
+        return false;
+
+    }
+
+}
+function readProfileName(value, errors) {
+
+    let name = blankToEmpty(value);
+
+    if(name === '') {
+        errors.push('Please provide a name for the new tenant profile.');
+        return '';
+    }
+
+    if(name.length > profileMaximum) {
+        errors.push('The name of a tenant profile must not be longer than ' + profileMaximum + ' characters.');
+        return '';
+    }
+
+    /*  This one test covers a lot of ground : a name that is only letters, digits, dashes and
+        underscores cannot contain a slash, a backslash, a colon, a dot, a leading dot, two dots,
+        a trailing space or any of the characters Windows refuses in a file name.                */
+    if(!profileChars.test(name)) {
+        errors.push('The name of a tenant profile may only contain the letters a to z, digits, dashes and underscores. Spaces, dots, slashes and accented or Japanese characters are not allowed - it becomes the name of two files.');
+        return '';
+    }
+
+    if(reservedDevices.indexOf(name.toLowerCase()) > -1) {
+        errors.push('Windows keeps the name ' + name + ' for a device of its own and refuses to use it as a file name. Please pick another name.');
+        return '';
+    }
+
+    if(reservedProfiles.indexOf(name.toLowerCase()) > -1) {
+        errors.push('The name ' + name + ' is used by this server for a file of its own. Saving a profile under that name would overwrite it. Please pick another name.');
+        return '';
+    }
+
+    return name;
+
+}
+function zeroWorkspaceIds() {
+
+    let ids = {};
+
+    for(let entry of workspaceKeys) {
+        if(typeof entry.key === 'undefined') continue;
+        ids[entry.key] = 0;
+    }
+
+    return ids;
+
+}
+
+
+/* ------------------------------------------------------------------------------
     CONFIGURATION FILE GENERATION
    ------------------------------------------------------------------------------ */
-function renderEnvironment(values) {
+function renderEnvironment(values, profile) {
 
     let lines = [];
 
@@ -462,6 +959,14 @@ function renderEnvironment(values) {
     lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
     lines.push('//  This file was written by the setup wizard on ' + new Date().toISOString() + '.');
     lines.push('//  You can edit it by hand, or simply open ' + values.redirectUri.replace(/\/callback$/, '/setup') + ' again.');
+
+    if(!isBlank(profile)) {
+        lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
+        lines.push('//  This is the tenant profile ' + profile + '. Start the app and choose ' + profile + ' in the menu of the launcher to use');
+        lines.push('//  these settings, or start the server with "npm start ' + profile + '". Its workspace ids are in settings/' + profile + '.js,');
+        lines.push('//  because workspace ids are numbered per tenant. Deleting both files removes the profile.');
+    }
+
     lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
     lines.push('exports.tenant       = ' + literal(values.tenant) + ';');
     lines.push('exports.clientId     = ' + literal(values.clientId) + ';');
@@ -526,12 +1031,18 @@ function renderEnvironment(values) {
     return lines.join('\n');
 
 }
-function renderWorkspaceIds(ids, indent) {
+function renderWorkspaceIds(ids, indent, note) {
 
     let inner = indent + '    ';
     let lines = ['{', ''];
     let width = 0;
     let first = true;
+
+    //  A zero means the same thing in both cases - the applications skip that workspace - but the
+    //  reason differs, and the file is read by people. After a discovery a zero really is a workspace
+    //  the tenant does not have. In a profile that has never been discovered every id is zero and
+    //  saying "not available" there would be a plain lie.
+    if(isBlank(note)) note = '   // not available in this tenant - this workspace gets skipped';
 
     for(let entry of workspaceKeys) {
         if(typeof entry.key === 'undefined') continue;
@@ -549,7 +1060,7 @@ function renderWorkspaceIds(ids, indent) {
 
         let id      = (typeof ids[entry.key] === 'number') ? ids[entry.key] : 0;
         let padding = new Array(width - entry.key.length + 1).join(' ');
-        let comment = (id === 0) ? '   // not available in this tenant - this workspace gets skipped' : '';
+        let comment = (id === 0) ? note : '';
 
         lines.push(inner + entry.key + padding + ' : ' + id + ',' + comment);
 
@@ -582,6 +1093,59 @@ function renderWizardSettings(ids) {
     lines.push('    workspaceIds : ' + renderWorkspaceIds(ids, '    '));
     lines.push('');
     lines.push('});');
+    lines.push('');
+
+    return lines.join('\n');
+
+}
+function renderProfileSettings(ids, profile, base, discovered) {
+
+    let lines = [];
+    let note  = discovered ? '' : '   // run the workspace discovery of the setup wizard while connected to this tenant';
+
+    lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
+    lines.push('//  SETTINGS OF THE TENANT PROFILE ' + profile.toUpperCase());
+    lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
+    lines.push('//  This file was written by the setup wizard on ' + new Date().toISOString() + '.');
+    lines.push('//  It belongs to environments/' + profile + '.js and is used whenever the server is started with the profile ' + profile + '.');
+    lines.push('//  Workspace ids are numbered per tenant, which is why every tenant profile keeps its own copy of them here.');
+
+    if(!discovered) {
+        lines.push('//  Every id below is 0 because the workspaces of this tenant have not been read yet, and ids of another');
+        lines.push('//  tenant would point at the wrong workspaces. Start the app with the profile ' + profile + ', open the setup');
+        lines.push('//  wizard and run "Discover workspaces" - the applications show empty lists until that has been done.');
+    }
+
+    if(base) {
+
+        lines.push('//  Every other setting is taken from settings/custom.js, so anything changed there applies to all of your');
+        lines.push('//  tenants at once. Add an override below this block if you need one for this tenant only.');
+        lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
+        lines.push("const custom = require('./custom.js');");
+        lines.push('');
+        lines.push('for(let key of Object.keys(custom)) exports[key] = custom[key];');
+        lines.push('');
+        lines.push('exports.common = Object.assign({}, custom.common, {');
+        lines.push('');
+        lines.push('    workspaceIds : ' + renderWorkspaceIds(ids, '    ', note));
+        lines.push('');
+        lines.push('});');
+
+    } else {
+
+        //  Reached when settings/custom.js is not there. Everything not defined here keeps coming from
+        //  settings.js, so the profile still works - it simply carries no shared customisation.
+        lines.push('//  settings/custom.js does not exist on this installation, so this file stands on its own and defines the');
+        lines.push('//  workspace ids only. Every other setting keeps coming from settings.js.');
+        lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
+        lines.push('exports.common = {');
+        lines.push('');
+        lines.push('    workspaceIds : ' + renderWorkspaceIds(ids, '    ', note));
+        lines.push('');
+        lines.push('}');
+
+    }
+
     lines.push('');
 
     return lines.join('\n');

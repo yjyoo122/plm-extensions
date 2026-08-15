@@ -18,6 +18,9 @@ let setupPollState    = 'down';
 let setupPollAttempts = 0;
 let setupSavedTenant  = '';
 let setupSavedClientId = '';
+let setupProfiles     = [];
+let setupOverwrite    = '';
+let setupAdminTest    = 0;
 
 
 $(document).ready(function() {
@@ -60,7 +63,10 @@ function loadStatus() {
         validateConnection();
         updateHeaderState();
         updateAuthState();
+        updateSaveMode();
         updateSummary();
+
+        loadProfiles();
 
         goToStep(getInitialStep());
 
@@ -106,6 +112,7 @@ function bindEvents() {
         updateTenantLink();
         validateConnection();
         updateAuthState();
+        updateProfileWorkspaces();
         updateSummary();
     });
 
@@ -135,6 +142,22 @@ function bindEvents() {
         updateSummary();
     });
 
+    // A result shown for one pair of values must never stay on screen for another one.
+    // The counter makes an answer which is still on its way belong to the values it was
+    // asked for : editing a field bumps it, and the late answer is then dropped instead
+    // of being written over the values the user has just corrected.
+    $('#admin-client-id, #admin-client-secret').on('input', function() {
+        setupAdminTest++;
+        $('#result-admin').removeClass('visible ok error busy').text('');
+        setFieldError('admin-client-id'    , '', false);
+        setFieldError('admin-client-secret', '', false);
+    });
+
+    $('#test-admin').click(function() {
+        if($(this).hasClass('disabled')) return;
+        testAdminCredentials();
+    });
+
     $('#toggle-advanced').click(function() {
         $('#disclosure-advanced').toggleClass('open');
     });
@@ -157,6 +180,21 @@ function bindEvents() {
     $('#save').click(function() {
         if($(this).hasClass('disabled')) return;
         save();
+    });
+
+    $('input[name="save-mode"]').change(function() {
+        // A name typed for one profile must not be carried over to the next save without the
+        // user seeing it again, so the confirmation to replace is dropped on every switch.
+        setupOverwrite = '';
+        updateSaveMode();
+        updateSummary();
+    });
+
+    $('#profile-name').on('input', function() {
+        setupOverwrite = '';
+        validateProfileName();
+        updateProfileWorkspaces();
+        updateSummary();
     });
 
     // The translation engine adds its own floating language switcher to every page and
@@ -296,7 +334,22 @@ function updateTenantLink() {
     }
 
     link.removeClass('disabled').attr('href', 'https://' + tenant + '.autodeskplm360.net/admin#section=setuphome&tab=general&item=configparams');
-    $('#hint-settings').text('This opens the General Settings of the tenant ' + tenant + ' in a new tab. You need administrator rights there.');
+    setSplitMessage($('#hint-settings'), 'This opens the General Settings of the tenant', tenant, 'in a new tab. You need administrator rights there.');
+
+}
+/*  The i18n layer matches whole text nodes, so a sentence built by concatenating a
+    runtime value would never match a dictionary entry. Emitting the fixed halves as
+    their own text nodes keeps both of them translatable, while the value itself sits
+    in a skipped span so a tenant named like a UI label never gets translated too.   */
+function setSplitMessage(elem, textBefore, value, textAfter) {
+
+    elem.empty();
+    elem.append(document.createTextNode(textBefore + ' '));
+    elem.append($('<span></span>').attr('data-i18n-skip', '').text(value));
+
+    /*  A trailing part which already starts with punctuation must sit tight against
+        the value, otherwise Japanese and Korean render a gap in front of the stop.  */
+    elem.append(document.createTextNode((/^[.,;:!?]/.test(textAfter) ? '' : ' ') + textAfter));
 
 }
 function updateHeaderState() {
@@ -308,7 +361,179 @@ function updateHeaderState() {
         return;
     }
 
-    elem.addClass('visible ok').text('This server is configured for the tenant ' + setupStatus.tenant + '. You can change the settings here at any time.');
+    elem.addClass('visible ok');
+    setSplitMessage(elem, 'This server is configured for the tenant', setupStatus.tenant, '. You can change the settings here at any time.');
+
+}
+
+
+/*  TENANT PROFILES
+
+    A profile is one more pair of configuration files describing another tenant.
+    The wizard always edits the profile the server was STARTED with - which the
+    header names, so nobody edits the wrong tenant by accident - and can write a
+    new profile next to it. Choosing between profiles happens in the launcher,
+    not here : a running server cannot swap its own connection settings.
+/* ----------------------------------------------------------------------------- */
+function loadProfiles() {
+
+    $.ajax({
+        url      : '/setup/profiles',
+        dataType : 'json'
+    }).done(function(response) {
+
+        setupProfiles = Array.isArray(response.profiles) ? response.profiles : [];
+
+        updateProfileHeader(response);
+        renderProfileList();
+        validateProfileName();
+        updateProfileWorkspaces();
+
+    }).fail(function() {
+
+        setupProfiles = [];
+
+        updateProfileHeader(null);
+        renderProfileList();
+
+    });
+
+}
+function updateProfileHeader(response) {
+
+    let elem = $('#header-profile').empty();
+
+    if(response === null) return;
+
+    if(response.usingDefault) {
+
+        if(setupProfiles.length === 0) return;
+
+        elem.text('You are editing the default settings in environment.js. ' + setupProfiles.length + ' tenant profile(s) exist next to it, pick one in the launcher window when you start the app.');
+
+        return;
+
+    }
+
+    elem.text('You are editing the tenant profile ' + response.active + ' in environments/' + response.active + '.js. Everything saved here applies to that profile only.');
+
+}
+function renderProfileList() {
+
+    let list = $('#profile-list').empty();
+
+    if(setupProfiles.length === 0) {
+        list.append($('<div></div>').addClass('field-hint').text('No tenant profile exists yet. The launcher only asks which tenant to use once at least one profile is there.'));
+        return;
+    }
+
+    for(let profile of setupProfiles) {
+
+        let row   = $('<div></div>').addClass('summary-row');
+        let value = '';
+
+        // data-i18n-skip keeps the translation engine away from the names the user chose
+        // and from the tenant names of their customers.
+        if(!profile.readable)          value = 'this file cannot be read, please open it in Notepad and compare it with environments/template.js';
+        else if(profile.tenant === '') value = 'no tenant is set in this file yet';
+        else                           value = profile.tenant;
+
+        row.append($('<div></div>').addClass('summary-label').attr('data-i18n-skip', '').text(profile.name));
+        row.append($('<div></div>').addClass('summary-value').text(value));
+
+        if(profile.active) row.append($('<div></div>').addClass('summary-value').text('in use right now'));
+
+        list.append(row);
+
+    }
+
+}
+function isNewProfileMode() {
+
+    return ($('#save-mode-profile').is(':checked'));
+
+}
+function updateSaveMode() {
+
+    let profileMode = isNewProfileMode();
+
+    if(profileMode) $('#profile-block').show();
+    else            $('#profile-block').hide();
+
+    $('#save').text(profileMode ? 'Save the tenant profile' : 'Save and restart');
+
+    setFieldError('profile-name', '', false);
+
+    if(profileMode) {
+        validateProfileName();
+        updateProfileWorkspaces();
+    }
+
+}
+function getProfileName() {
+
+    return $.trim(String($('#profile-name').val()));
+
+}
+function findProfile(name) {
+
+    for(let profile of setupProfiles) {
+        if(String(profile.name).toLowerCase() === String(name).toLowerCase()) return profile;
+    }
+
+    return null;
+
+}
+function validateProfileName(showAll) {
+
+    let name = getProfileName();
+
+    setFieldError('profile-name', '', false);
+
+    if(!isNewProfileMode()) return true;
+
+    if(name === '') {
+        if(showAll) setFieldError('profile-name', 'Please give the new tenant profile a name.', true);
+        return false;
+    }
+
+    if(!/^[A-Za-z0-9_-]+$/.test(name)) {
+        setFieldError('profile-name', 'A profile name may only contain the letters a to z, digits, dashes and underscores. It becomes the name of two files.', true);
+        return false;
+    }
+
+    if(name.length > 40) {
+        setFieldError('profile-name', 'A profile name must not be longer than 40 characters.', true);
+        return false;
+    }
+
+    if(findProfile(name) !== null) {
+        setFieldError('profile-name', 'A tenant profile with this name exists already. Saving replaces it, and you will be asked to confirm that first.', true);
+        return true;
+    }
+
+    return true;
+
+}
+function updateProfileWorkspaces() {
+
+    let message = $('#profile-workspaces').removeClass('ok error').removeClass('visible');
+    let tenant  = normalizeTenant($('#tenant').val());
+
+    if(!isNewProfileMode()) return;
+
+    message.addClass('visible');
+
+    /*  Workspace ids are numbered per tenant, so the ids on this page belong to the tenant this
+        server is connected to and to no other one. They are only written into the new profile when
+        it describes that very tenant. In every other case the profile starts with all ids at 0 and
+        the discovery has to be run again after switching - which is what this says, before saving. */
+    if(setupDiscovered && (tenant === setupStatus.tenant) && (tenant !== '')) {
+        message.addClass('ok').text('The workspace ids you discovered above belong to this tenant and will be written into the profile.');
+        return;
+    }
+
+    message.text('The new profile starts with all workspace ids set to 0, because workspace ids are numbered per tenant and the ones on this page belong to the tenant this server is connected to. Save the profile, close the app, start it again and choose the profile in the launcher window - then come back to step 5 here and run Discover workspaces. Until that is done the applications open with empty lists.');
 
 }
 
@@ -341,6 +566,79 @@ function checkTenant() {
 
     }).fail(function() {
         result.removeClass('busy').addClass('error').text('The check could not be run. Please make sure this server still runs and try again.');
+    });
+
+}
+
+
+/*  ADMIN CREDENTIALS TEST
+/* ----------------------------------------------------------------------------- */
+function testAdminCredentials() {
+
+    let clientId = $.trim(String($('#admin-client-id').val()));
+    let secret   = String($('#admin-client-secret').val());
+    let button   = $('#test-admin');
+    let result   = $('#result-admin').addClass('visible busy').removeClass('ok error');
+
+    setFieldError('admin-client-id'    , '', false);
+    setFieldError('admin-client-secret', '', false);
+
+    if(clientId === '') {
+        result.removeClass('busy').addClass('error').text('Please provide the Admin Client ID of your second APS app before testing.');
+        setFieldError('admin-client-id', 'Please provide the Admin Client ID of your second APS app before testing.', true);
+        return;
+    }
+
+    if(secret === '') {
+        result.removeClass('busy').addClass('error').text('Please provide the Admin Client Secret of your second APS app before testing.');
+        setFieldError('admin-client-secret', 'Please provide the Admin Client Secret of your second APS app before testing.', true);
+        return;
+    }
+
+    result.text('Asking Autodesk for a server token ...');
+
+    button.addClass('disabled');
+
+    let attempt = ++setupAdminTest;
+
+    // The secret leaves this page exactly once, in this request, and is never returned.
+    // When it still shows the mask, the server tests the secret it already has instead.
+    $.ajax({
+        url         : '/setup/test-admin',
+        type        : 'POST',
+        contentType : 'application/json',
+        data        : JSON.stringify({ adminClientId : clientId, adminClientSecret : secret }),
+        dataType    : 'json',
+        timeout     : 30000
+    }).done(function(response) {
+
+        button.removeClass('disabled');
+
+        if(attempt !== setupAdminTest) return;
+
+        result.removeClass('busy').addClass(response.success ? 'ok' : 'error').text(response.message);
+
+        if(response.success) return;
+
+        if(response.code === 'wrongtype') setFieldError('admin-client-id'    , 'This app cannot issue a server token. Please use a second APS app of a server to server type.', true);
+        if(response.code === 'rejected')  setFieldError('admin-client-secret', 'This Client ID and this Client Secret were not accepted together.', true);
+
+    }).fail(function(request) {
+
+        button.removeClass('disabled');
+
+        if(attempt !== setupAdminTest) return;
+
+        let message = 'The test could not be run. Please make sure this server still runs and try again.';
+
+        if(typeof request.responseJSON !== 'undefined') {
+            if(request.responseJSON !== null) {
+                if(typeof request.responseJSON.message === 'string') message = request.responseJSON.message;
+            }
+        }
+
+        result.removeClass('busy').addClass('error').text(message);
+
     });
 
 }
@@ -418,6 +716,8 @@ function discoverWorkspaces() {
         }
 
         result.addClass('ok').text('Found ' + setupWorkspaces.length + ' workspaces in your tenant and matched ' + matched + ' of them automatically. Please review the table below and correct anything that looks wrong.');
+
+        updateProfileWorkspaces();
 
     });
 
@@ -675,16 +975,39 @@ function updateSummary() {
     addSummaryRow(summary, 'Vault'               , ($.trim(String($('#vault-gateway').val())) === '') ? 'not used' : $.trim(String($('#vault-gateway').val())) + ' / ' + $.trim(String($('#vault-name').val())));
     addSummaryRow(summary, 'Workspace ids'       , setupDiscovered ? (matched + ' workspaces detected, will be written') : 'not discovered, the existing ids stay unchanged');
 
-}
-function addSummaryRow(summary, label, value) {
+    if(isNewProfileMode()) {
+        if(getProfileName() === '') addSummaryRow(summary, 'Saved as', 'a new tenant profile, still without a name');
+        else                        addSummaryRow(summary, 'Saved as', 'the new tenant profile', getProfileName());
+        return;
+    }
 
-    let row = $('<div></div>').addClass('summary-row');
+    addSummaryRow(summary, 'Saved as', 'the settings this server runs on', (typeof setupStatus.environmentFile === 'undefined') ? 'environment.js' : setupStatus.environmentFile);
+
+}
+/*  literal is an optional file or profile name appended after the value. It goes into
+    its own skipped span so that the value stays translatable while the name does not
+    get matched against the dictionary, see setSplitMessage.                          */
+function addSummaryRow(summary, label, value, literal) {
+
+    let row   = $('<div></div>').addClass('summary-row');
+    let elem  = $('<div></div>').addClass('summary-value');
 
     row.append($('<div></div>').addClass('summary-label').text(label));
-    row.append($('<div></div>').addClass('summary-value').text((value === '') ? '-' : value));
+
+    if(isBlankText(literal)) {
+        elem.text((value === '') ? '-' : value);
+    } else {
+        elem.append(document.createTextNode(value + ' '));
+        elem.append($('<span></span>').attr('data-i18n-skip', '').text(literal));
+    }
+
+    row.append(elem);
 
     summary.append(row);
 
+}
+function isBlankText(value) {
+    return (typeof value === 'undefined') || (value === null) || (String(value).trim() === '');
 }
 function save() {
 
@@ -693,6 +1016,7 @@ function save() {
         goToStep(2);
         return;
     }
+    if(!validateProfileName(true)) return;
 
     let secret  = String($('#admin-client-secret').val());
     let result  = $('#result-save').addClass('visible busy').removeClass('ok error').text('Saving your settings ...');
@@ -712,6 +1036,17 @@ function save() {
     if(secret !== setupSecretMask) payload.adminClientSecret = secret;
     if(setupDiscovered) payload.workspaceIds = getWorkspaceIds();
 
+    if(isNewProfileMode()) {
+
+        payload.saveMode    = 'profile';
+        payload.profileName = getProfileName();
+
+        // Only ever true for the exact name the user has just confirmed. Typing a different name
+        // or switching the save target clears it again, so no profile is replaced unseen.
+        payload.overwriteProfile = (setupOverwrite !== '') && (setupOverwrite === payload.profileName);
+
+    }
+
     setupSavedTenant   = payload.tenant;
     setupSavedClientId = payload.clientId;
     setupSaving        = true;
@@ -728,6 +1063,22 @@ function save() {
 
         clearStash();
 
+        if(typeof response.savedProfile === 'string') {
+
+            setupSaving    = false;
+            setupOverwrite = '';
+
+            $('#save').removeClass('disabled');
+
+            result.removeClass('busy').addClass('ok').text('The tenant profile was saved.');
+
+            loadProfiles();
+            showProfileInfo(response);
+
+            return;
+
+        }
+
         result.removeClass('busy').addClass('ok').text('Your settings were saved.');
 
         showRestartInfo(response);
@@ -738,12 +1089,19 @@ function save() {
 
         $('#save').removeClass('disabled');
 
-        let messages = ['The settings could not be saved.'];
+        let answer   = ((typeof request.responseJSON === 'undefined') || (request.responseJSON === null)) ? {} : request.responseJSON;
+        let messages = Array.isArray(answer.errors) ? answer.errors : ['The settings could not be saved.'];
 
-        if(typeof request.responseJSON !== 'undefined') {
-            if(request.responseJSON !== null) {
-                if(Array.isArray(request.responseJSON.errors)) messages = request.responseJSON.errors;
-            }
+        // The server refuses to replace an existing profile until it has been told to. The name is
+        // remembered here, so pressing the button a second time carries the confirmation with it.
+        if(answer.profileExists === true) {
+
+            setupOverwrite = String(answer.profileName);
+
+            result.removeClass('busy').addClass('error').text('A tenant profile named ' + answer.profileName + ' exists already. Press Save once more to replace it, or type another name. A timestamped backup of the files being replaced is kept.');
+
+            return;
+
         }
 
         result.removeClass('busy').addClass('error').text(messages.join(' '));
@@ -783,6 +1141,30 @@ function showRestartInfo(response) {
     info.prepend($('<div></div>').attr('id', 'restart-state').text('Your settings are saved and the server is restarting. This page reloads automatically as soon as the server is back, usually within a few seconds. Please leave the console window of the server open.'));
 
     startPolling();
+
+}
+function showProfileInfo(response) {
+
+    /*  Deliberately no restart and no polling. This server keeps running on the tenant it was
+        started with : it has no way to load another environment file into itself, and restarting
+        it would only bring the same tenant back. The launcher is where a tenant is chosen, so
+        that is what this explains.                                                              */
+    let info = $('#restart-info').addClass('visible').empty();
+
+    info.append($('<div></div>').text('The tenant profile ' + response.savedProfile + ' was saved. This server keeps running on the tenant it was started with - nothing about it has changed.'));
+    info.append($('<div></div>').text('To use the new profile : close the black console window of the app, start it again, and choose ' + response.savedProfile + ' in the list the launcher now shows.'));
+
+    if(Array.isArray(response.warnings)) {
+        for(let warning of response.warnings) {
+            info.append($('<div></div>').addClass('field-message visible error').text(warning));
+        }
+    }
+
+    if(Array.isArray(response.files)) {
+        if(response.files.length > 0) {
+            info.append($('<div></div>').addClass('file-list').text('Files written : ' + response.files.join(', ')));
+        }
+    }
 
 }
 function startPolling() {
@@ -852,6 +1234,8 @@ function stashInput() {
         adminClientId : String($('#admin-client-id').val()),
         vaultGateway  : String($('#vault-gateway').val()),
         vaultName     : String($('#vault-name').val()),
+        profileName   : getProfileName(),
+        profileMode   : isNewProfileMode(),
         secretTyped   : ((String($('#admin-client-secret').val()) !== setupSecretMask) && (String($('#admin-client-secret').val()) !== ''))
     };
 
@@ -892,6 +1276,9 @@ function restoreStash() {
     $('#admin-client-id').val(stash.adminClientId);
     $('#vault-gateway' ).val(stash.vaultGateway);
     $('#vault-name'    ).val(stash.vaultName);
+
+    if(typeof stash.profileName === 'string') $('#profile-name').val(stash.profileName);
+    if(stash.profileMode === true)            $('#save-mode-profile').prop('checked', true);
 
     if(stash.secretTyped) {
         $('#disclosure-advanced').addClass('open');
