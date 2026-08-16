@@ -788,6 +788,13 @@ function matchWorkspaces() {
     let rows = [];
     let used = {};
 
+    /*  Every row starts from the id this server is ALREADY configured with, not from zero.
+        A workspace the matching below cannot identify - because this tenant names it something
+        the alias list does not know - therefore keeps the value that was working until now
+        instead of being overwritten with a zero, which would silently disable the applications
+        that use it. Only a workspace which was never configured stays at zero.               */
+    let current = (typeof setupStatus.workspaceIds === 'object' && setupStatus.workspaceIds !== null) ? setupStatus.workspaceIds : {};
+
     for(let entry of setupStatus.workspaceKeys) {
 
         if(typeof entry.group !== 'undefined') {
@@ -795,13 +802,18 @@ function matchWorkspaces() {
             continue;
         }
 
+        let existing = parseInt(current[entry.key], 10);
+
+        if(isNaN(existing) || (existing < 0)) existing = 0;
+
         rows.push({
-            key     : entry.key,
-            label   : entry.label,
-            aliases : entry.aliases,
-            id      : 0,
-            title   : '',
-            matched : false
+            key      : entry.key,
+            label    : entry.label,
+            aliases  : entry.aliases,
+            id       : existing,
+            existing : existing,
+            title    : '',
+            matched  : false
         });
 
     }
@@ -904,6 +916,22 @@ function renderWorkspaceTable() {
 
         list.append($('<option></option>').attr('value', '0').text('not present in this tenant (will be skipped)'));
 
+        /*  The discovery only returns the workspaces this user can see. When the id this server is
+            already configured with is not among them - a workspace the user has no access to, or one
+            this tenant names differently - there would be no option carrying that value, the select
+            would silently fall back to 0 and saving would wipe a working setting. So it gets an
+            option of its own and stays selected until the user decides otherwise.                  */
+        let known = false;
+
+        for(let workspace of setupWorkspaces) {
+            if(String(workspace.id) === String(row.existing)) known = true;
+        }
+
+        if((row.existing > 0) && !known) {
+            list.append($('<option></option>').attr('value', row.existing).text('keep the setting this server already uses')
+                .append($('<span></span>').attr('data-i18n-skip', '').text('  (' + row.existing + ')')));
+        }
+
         for(let workspace of setupWorkspaces) {
             // data-i18n-skip keeps the translation engine away from tenant data : a workspace
             // literally named 'Items' must stay exactly as your tenant spells it.
@@ -930,7 +958,7 @@ function renderWorkspaceTable() {
     }
 
     container.append(table);
-    container.append($('<div></div>').attr('id', 'workspace-summary').text('Settings marked as not present are written as 0 and get skipped by the applications. That is expected whenever your tenant simply does not use that workspace.'));
+    container.append($('<div></div>').attr('id', 'workspace-summary').text('A workspace the discovery could not identify keeps the setting this server already uses, so nothing that works today gets lost. Only the rows marked as not present are written as 0, and the applications skip those.'));
 
 }
 function getWorkspaceIds() {

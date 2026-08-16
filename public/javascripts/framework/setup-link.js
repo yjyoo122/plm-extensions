@@ -24,10 +24,17 @@
 
 (function() {
 
-    const STORAGE_KEY = 'plmx-setup-available';
-    const LABEL       = 'Server Settings';
-    const TOOLTIP     = 'Open the setup wizard to change tenant or connection settings';
-    const THEMES      = ['light', 'dark', 'black', 'fusion'];
+    const STORAGE_KEY  = 'plmx-setup-available';
+    const LABEL        = 'Server Settings';
+    const TOOLTIP      = 'Open the setup wizard to change tenant or connection settings';
+    const HOME_LABEL   = 'Home';
+    const HOME_TOOLTIP = 'Back to the overview of all applications';
+    const THEMES       = ['light', 'dark', 'black', 'fusion'];
+
+    /*  Deliberately /landing and not / : exports.server.landingPage may point / at one
+        single application, in which case / would never reach the overview again. The
+        /landing route always renders the gallery of all applications.                 */
+    const HOME_URL     = '/landing';
 
 
     /*  ERROR CONTAINMENT
@@ -156,6 +163,68 @@
         $('#header-toolbar').children('.button') and trigger .first().click() on
         them. The wrapper keeps this control out of every one of those selections. */
 
+    /*  HOME CONTROL
+        -----------------------------------------------------------------------------
+        Every application fills the whole window, and several of them are opened with
+        a context item so that pressing Back leads out of the server rather than up.
+        This button is the way out : it always returns to the overview of all
+        applications, in the same tab, carrying the current theme and language so that
+        the user does not land on an english light-themed page.
+
+        It is injected exactly like the gear - inside a wrapper that is not a '.button'
+        child of #header-toolbar - because applications bind their own handlers to
+        every one of those. See the note on insertHeaderButton below.                 */
+
+    function getHomeUrl() {
+
+        let url    = HOME_URL;
+        let params = [];
+
+        if(typeof window.theme === 'string') {
+            if(THEMES.indexOf(window.theme.toLowerCase()) > -1) params.push('theme=' + encodeURIComponent(window.theme.toLowerCase()));
+        }
+
+        if(window.plmxI18n && (typeof window.plmxI18n.lang === 'string') && (window.plmxI18n.lang !== '')) {
+            params.push('uilang=' + encodeURIComponent(window.plmxI18n.lang));
+        }
+
+        if(params.length > 0) url += '?' + params.join('&');
+
+        return url;
+
+    }
+
+    function insertHomeButton() {
+
+        let elemToolbar = $('#header-toolbar');
+
+        if(elemToolbar.length === 0)   return;
+        if($('#home-link').length > 0) return;
+
+        let elemControl = $('<div></div>')
+            .attr('id', 'home-link')
+            .addClass('setup-link-control');
+
+        $('<div></div>')
+            .addClass('button').addClass('icon').addClass('icon-home')
+            .attr('title', HOME_TOOLTIP)
+            .attr('aria-label', HOME_LABEL)
+            .click(guard('home', function() { document.location.href = getHomeUrl(); }))
+            .appendTo(elemControl);
+
+        let elemAnchor = elemToolbar.children('#setup-link');
+
+        if(elemAnchor.length === 0) elemAnchor = elemToolbar.children('#header-avatar');
+
+        if(elemAnchor.length > 0) elemControl.insertBefore(elemAnchor);
+        else                      elemControl.appendTo(elemToolbar);
+
+        translate(elemControl);
+        followToolbar(elemToolbar, elemControl);
+
+    }
+
+
     function insertHeaderButton() {
 
         let elemToolbar = $('#header-toolbar');
@@ -266,6 +335,14 @@
 
     function start() {
 
+        /*  The home button is not tied to the wizard : it only navigates, so it works on a
+            cloud deployment as well and must not wait for - or depend on - the probe. It is
+            installed first so that the gear, which inserts itself before #setup-link when
+            present, still ends up between home and the avatar.
+            The landing page is excluded : it IS the destination, a home button there would
+            reload the page the user is already looking at.                                  */
+        if(!isLandingPage()) insertHomeButton();
+
         if($('#header-toolbar').length === 0) {
             if($('#setup-link-landing').length === 0) return;
         }
@@ -273,6 +350,14 @@
         probe(guard('install', function(available) {
             if(available) install();
         }));
+
+    }
+
+    function isLandingPage() {
+
+        let path = String(document.location.pathname).replace(/\/+$/, '');
+
+        return (path === '') || (path === '/landing');
 
     }
 
