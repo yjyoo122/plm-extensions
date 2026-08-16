@@ -70,7 +70,34 @@ if ((process.argv.length > 2) && (!fs.existsSync(pathEnvironment))) {
     } 
 
     let settings = require('./settings.js');
-    let custom   = require('./settings/' + environment.settings);
+
+    /*  A tenant profile names its own settings file. When that file is missing - it was deleted,
+        or the profile was created by hand - requiring it straight away ends the process with a
+        stack trace before anything is listening. Under the Windows launcher that means the app
+        never comes back and the setup wizard cannot be reached either, so there is no way left
+        to correct the profile through the interface. Falling back to the standard custom.js
+        keeps the server up and says clearly what is wrong.                                     */
+    let custom = {};
+
+    try {
+        custom = require('./settings/' + environment.settings);
+    } catch(error) {
+
+        console.log();
+        console.log('  !! The settings file settings/' + environment.settings + ' could not be loaded');
+        console.log('  !! ' + error.message.split('\n')[0]);
+
+        try {
+            custom = require('./settings/custom.js');
+            console.log('  !! Using settings/custom.js instead. Open the setup wizard to correct this tenant.');
+        } catch(fallbackError) {
+            console.log('  !! settings/custom.js could not be loaded either, continuing without custom settings.');
+            custom = {};
+        }
+
+        console.log();
+
+    }
 
     mergeSettings(settings, custom);
     removeDisabledServicesFromMenu(settings.menu, settings.server);

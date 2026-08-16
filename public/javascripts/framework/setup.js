@@ -474,11 +474,23 @@ function renderProfileList() {
             non-technical user should be making decisions. The button records the choice and the
             server restarts itself onto it, exactly like saving the connection settings does.     */
         if(!entry.active) {
+
             head.append($('<div></div>')
                 .addClass('button').addClass('profile-switch')
                 .attr('data-profile', entry.isDefault ? '' : entry.name)
                 .text('Switch to this tenant')
                 .click(function() { activateProfile($(this).attr('data-profile'), $(this)); }));
+
+            //  The default settings are not a file this wizard created and are never deleted.
+            if(!entry.isDefault) {
+                head.append($('<div></div>')
+                    .addClass('button').addClass('profile-delete')
+                    .attr('data-profile', entry.name)
+                    .attr('title', 'Delete this tenant profile')
+                    .text('Delete')
+                    .click(function() { deleteProfile($(this).attr('data-profile'), $(this)); }));
+            }
+
         }
 
         card.append(line);
@@ -511,6 +523,58 @@ function renderProfileList() {
     }
 
 }
+function deleteProfile(profile, elemButton) {
+
+    if(setupSaving) return;
+
+    /*  Asked once, in the button itself, rather than through a confirm dialog : the files are
+        backed up next to the originals anyway, and a dialog on a page the user is still
+        learning their way around is one more thing to be unsure about.                      */
+    if(elemButton.attr('data-armed') !== '1') {
+        $('.profile-delete').removeAttr('data-armed').removeClass('armed').text('Delete');
+        elemButton.attr('data-armed', '1').addClass('armed').text('Really delete?');
+        return;
+    }
+
+    setupSaving = true;
+    $('.profile-switch, .profile-delete').addClass('disabled');
+    elemButton.text('Deleting ...');
+
+    $.ajax({
+        url         : '/setup/profile-delete',
+        method      : 'POST',
+        contentType : 'application/json',
+        dataType    : 'json',
+        data        : JSON.stringify({ profile : profile })
+    }).done(function(response) {
+
+        setupSaving = false;
+
+        $('#restart-info').addClass('visible').empty()
+            .append($('<div></div>').append(
+                $('<span></span>').text('The tenant profile was deleted. A copy of both files was kept next to the originals :'),
+                $('<span></span>').attr('data-i18n-skip', '').text(' ' + (response.files || []).join(', '))
+            ));
+
+        loadProfiles();
+        validateProfileName();
+
+    }).fail(function(xhr) {
+
+        setupSaving = false;
+        $('.profile-switch, .profile-delete').removeClass('disabled');
+
+        let message = 'The tenant could not be deleted.';
+
+        if(xhr && xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
+
+        $('#restart-info').addClass('visible').empty().append($('<div></div>').addClass('error').text(message));
+
+        loadProfiles();
+
+    });
+
+}
 function activateProfile(profile, elemButton) {
 
     if(setupSaving) return;
@@ -540,7 +604,14 @@ function activateProfile(profile, elemButton) {
 
         info.append($('<div></div>').attr('id', 'restart-state').text('Switching tenant. This page reloads automatically as soon as the server is back, usually within a few seconds. Please leave the console window of the server open.'));
 
-        startPolling();
+        /*  The active profile reported by /setup/status is what proves the server came back on
+            the tenant that was just chosen. Comparing the tenant name would not do : two
+            profiles are allowed to point at the same tenant, and then it never changes.
+            Back to the wizard rather than to the applications, because the workspace ids of
+            the tenant just switched to usually still have to be discovered.                  */
+        startPolling(function(status) {
+            return (String(status.profile) === String(profile));
+        }, '/setup');
 
     }).fail(function(xhr) {
 
@@ -1278,7 +1349,11 @@ function showRestartInfo(response) {
 
     info.prepend($('<div></div>').attr('id', 'restart-state').text('Your settings are saved and the server is restarting. This page reloads automatically as soon as the server is back, usually within a few seconds. Please leave the console window of the server open.'));
 
-    startPolling();
+    //  The settings that were just written coming back out of /setup/status is the proof
+    //  that this is the restarted server and not the one which is still going down.
+    startPolling(function(status) {
+        return (status.tenant === setupSavedTenant) && (status.clientId === setupSavedClientId);
+    }, '/');
 
 }
 function showProfileInfo(response) {
@@ -1305,10 +1380,23 @@ function showProfileInfo(response) {
     }
 
 }
-function startPolling() {
+/*  Waits for the server to come back after it restarted itself, then leaves this page.
+    -----------------------------------------------------------------------------------
+    'settled' decides what counts as proof that the restart already happened, and it HAS to
+    be given by the caller. Saving the connection settings and switching tenant restart the
+    server for different reasons and recognise the result by different fields, and a test
+    belonging to the other flow simply never becomes true - the page then polls until it
+    gives up and claims the server never came back, while the server is answering every one
+    of those requests with 200.
+
+    'target' is where to go once it did settle.                                            */
+function startPolling(settled, target) {
 
     setupPollState    = 'down';
     setupPollAttempts = 0;
+
+    if(typeof settled !== 'function') settled = function() { return true; };
+    if(typeof target  !== 'string')   target  = '/';
 
     if(setupPollHandle !== null) clearInterval(setupPollHandle);
 
@@ -1331,22 +1419,23 @@ function startPolling() {
             cache    : false
         }).done(function(response) {
 
+            if(typeof response !== 'object') return;
+            if(response === null)            return;
+
             if(setupPollState !== 'gone') {
 
                 // The server can also come back so quickly that this page never sees it
-                // being down. In that case the new tenant showing up in the status is
-                // the proof that the restart already happened.
-                if(typeof response         === 'undefined') return;
-                if(response.tenant         !== setupSavedTenant) return;
-                if(response.clientId       !== setupSavedClientId) return;
-                if(setupPollAttempts       <   6) return;
+                // being down. In that case the caller's test is the only proof that the
+                // restart already happened.
+                if(!settled(response))   return;
+                if(setupPollAttempts < 6) return;
 
             }
 
             clearInterval(setupPollHandle);
             setupPollHandle = null;
 
-            window.location.href = '/';
+            window.location.href = target;
 
         }).fail(function() {
             setupPollState = 'gone';

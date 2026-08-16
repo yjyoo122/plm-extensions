@@ -316,9 +316,23 @@
     padding     : 0 12px;
     white-space : nowrap;
 }
-.profile-switch.disabled {
+.profile-switch.disabled,
+.profile-delete.disabled {
     opacity        : 0.5;
     pointer-events : none;
+}
+.profile-delete {
+    font-size   : 12px;
+    line-height : 24px;
+    padding     : 0 12px;
+    white-space : nowrap;
+}
+.profile-switch + .profile-delete {
+    margin-left : 0;
+}
+.profile-delete.armed {
+    background : var(--color-status-red);
+    color      : #ffffff;
 }
 
 .field-hint {

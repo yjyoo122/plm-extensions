@@ -265,18 +265,36 @@ router.get('/profiles', function(req, res, next) {
     let locals = req.app.locals;
 
     /*  The default connection settings are a tenant this server can be started with just
-        like any profile, and the launcher offers them as entry 0. Leaving them out of this
-        list made it read as if the profiles were everything there is, so they are reported
-        as an entry of their own and the page can show one complete list.                  */
+        like any profile. Leaving them out of this list made it read as if the profiles were
+        everything there is, so they are reported as an entry of their own.
+
+        environment.js is read from disk rather than taken from app.locals : once the server
+        runs on a profile, locals describe THAT profile, and reporting them here would label
+        the default entry with the profile's own file name and tenant.                      */
+    let defaultTenant   = '';
+    let defaultReadable = true;
+    let pathDefault     = path.join(pathRoot, 'environment.js');
+
+    if(active === '') {
+        defaultTenant = blankToEmpty(locals.tenant);
+    } else if(fs.existsSync(pathDefault)) {
+        try {
+            delete require.cache[require.resolve(pathDefault)];
+            defaultTenant = blankToEmpty(require(pathDefault).tenant);
+        } catch(error) {
+            defaultReadable = false;
+        }
+    }
+
     res.json({
         active       : active,
         usingDefault : (active === ''),
         defaultEntry : {
-            name     : path.basename(getEnvironmentPath()),
-            tenant   : blankToEmpty(locals.tenant),
-            active   : (active === ''),
-            readable : true,
-            isDefault: true
+            name      : 'environment.js',
+            tenant    : defaultTenant,
+            active    : (active === ''),
+            readable  : defaultReadable,
+            isDefault : true
         },
         profiles     : listProfiles()
     });
@@ -860,8 +878,32 @@ router.post('/activate', function(req, res, next) {
             return res.status(400).json({ ok : false, message : 'That tenant name is not valid.' });
         }
 
-        if(!fs.existsSync(path.join(pathEnvironments, profile + '.js'))) {
+        let pathEnvironment = path.join(pathEnvironments, profile + '.js');
+
+        if(!fs.existsSync(pathEnvironment)) {
             return res.status(400).json({ ok : false, message : 'The tenant ' + profile + ' does not exist any more. Please reload this page.' });
+        }
+
+        /*  Everything this profile needs has to be proven present BEFORE it is recorded. The
+            server is about to end itself and be relaunched on it, so a profile that cannot be
+            loaded would take the whole app down with no way back through the interface - the
+            wizard would not be reachable either.                                              */
+        let loaded = null;
+
+        try {
+            delete require.cache[require.resolve(pathEnvironment)];
+            loaded = require(pathEnvironment);
+        } catch(error) {
+            return res.status(400).json({ ok : false, message : 'The file environments/' + profile + '.js cannot be read, so the app is left on the tenant it is running on. Please check that file for a typo.' });
+        }
+
+        let settingsName = String(blankToEmpty(loaded.settings));
+
+        if(settingsName === '') settingsName = 'custom.js';
+        if(!settingsName.endsWith('.js')) settingsName += '.js';
+
+        if(!fs.existsSync(path.join(pathSettings, settingsName))) {
+            return res.status(400).json({ ok : false, message : 'The tenant ' + profile + ' refers to the settings file settings/' + settingsName + ', which is not there. Save the profile again from this page to recreate it, or delete the profile.' });
         }
 
     }
@@ -891,6 +933,71 @@ router.post('/activate', function(req, res, next) {
             process.exit(42);
         }, 750);
     }
+
+});
+
+
+/* ------------------------------------------------------------------------------
+    DELETING A TENANT PROFILE
+
+    Creating a profile was possible from the first version, correcting a mistake in
+    one was not - a profile saved with the wrong tenant could only be removed by
+    finding two files in Explorer. Both files are backed up before they go, so the
+    values can still be read back afterwards.
+   ------------------------------------------------------------------------------ */
+router.post('/profile-delete', function(req, res, next) {
+
+    if(!isSameOriginRequest(req)) {
+        return res.status(403).json({ ok : false, message : 'This request did not come from the setup wizard page.' });
+    }
+
+    let body    = (typeof req.body === 'object' && req.body !== null) ? req.body : {};
+    let profile = String(blankToEmpty(body.profile)).trim();
+
+    if(!profileChars.test(profile) || (profile.length > profileMaximum)) {
+        return res.status(400).json({ ok : false, message : 'That tenant name is not valid.' });
+    }
+
+    if(reservedProfiles.indexOf(profile.toLowerCase()) > -1) {
+        return res.status(400).json({ ok : false, message : 'That file does not belong to a tenant profile and is not deleted.' });
+    }
+
+    //  Deleting the profile the server is running on would leave it connected to settings
+    //  which are no longer on disk, so the user is asked to switch away from it first.
+    if(profile === getActiveProfile()) {
+        return res.status(400).json({ ok : false, message : 'This is the tenant the app is running on. Switch to another one first, then delete it.' });
+    }
+
+    let pathEnvironment = path.join(pathEnvironments, profile + '.js');
+    let pathSetting     = path.join(pathSettings, profile + '.js');
+
+    if(!fs.existsSync(pathEnvironment)) {
+        return res.status(400).json({ ok : false, message : 'The tenant ' + profile + ' does not exist any more. Please reload this page.' });
+    }
+
+    let files = [];
+
+    try {
+
+        backupFile(pathEnvironment, files);
+        fs.unlinkSync(pathEnvironment);
+
+        //  The settings file is optional : a profile whose workspace ids were never written
+        //  does not have one, and that is not an error.
+        if(fs.existsSync(pathSetting)) {
+            backupFile(pathSetting, files);
+            fs.unlinkSync(pathSetting);
+        }
+
+    } catch(error) {
+        return res.status(500).json({ ok : false, message : 'The tenant could not be deleted : ' + error.message });
+    }
+
+    console.log();
+    console.log('  Deleted the tenant profile ' + profile);
+    console.log();
+
+    res.json({ ok : true, profile : profile, files : files });
 
 });
 
