@@ -83,145 +83,87 @@ rem  TENANT PROFILE
 rem ---------------------------------------------------------------------------------------------------
 rem  environment.js holds the connection settings of ONE tenant. Somebody who demonstrates to several
 rem  customers keeps one file per tenant in the folder environments\ instead. The server accepts the name
-rem  of that file as its only argument : "bin\www tokyo" reads environments\tokyo.js. The setup wizard
-rem  writes those files, this block is what lets the user pick one without ever opening a terminal.
+rem  of that file as its only argument : "bin\www tokyo" reads environments\tokyo.js.
 rem
-rem  When no profile file exists nothing is printed and nothing is asked, and the app starts exactly as it
-rem  did before this block was added, on environment.js. That keeps the single tenant installation - which
-rem  is what most people have - completely unchanged.
+rem  Which one is used is NOT asked here. This window is not where a non-technical user should be making
+rem  decisions, so the app always starts on whatever the setup wizard recorded in .plmx-profile, and the
+rem  wizard is the single place where a tenant is chosen or switched. An empty or missing file means the
+rem  default settings in environment.js, which is also what a fresh installation gets.
 rem
-rem  The picker runs ONCE, above the supervisor loop further down. The restart the setup wizard triggers
-rem  with exit code 42 therefore silently reuses the profile chosen here instead of asking again.
+rem  The value is read again on every pass of the supervisor loop further down, so switching tenant in
+rem  the wizard - which ends the process with exit code 42 - comes back up on the newly chosen one.
+
+set "PLMX_PROFILEFILE=!PLMX_HOME!.plmx-profile"
+set "PLMX_PROFILE="
+set "PLMX_ENVIRONMENT=!PLMX_HOME!environment.js"
+
+set "PLMX_SAIDIT="
+call :plmx_read_profile
+set "PLMX_SAIDIT=1"
+
+goto :plmx_profile_ready
+
+
+:plmx_read_profile
+
+rem  Reads .plmx-profile and proves the profile it names is actually usable. Anything wrong with it
+rem  falls back to the default settings rather than failing the launch : a missing or broken profile
+rem  must never leave the user with a window that closes again.
 rem
-rem  template.js is the documented example file and is never a tenant, and the wizard keeps timestamped
-rem  copies named <profile>.backup-<stamp>.js next to the originals. Neither belongs in the menu.
+rem  This runs twice for the first launch - once to work out the port for the browser, once at the top
+rem  of the supervisor loop - and both reads see the same file. PLMX_SAIDIT is what keeps a complaint
+rem  about that one file from being printed to the user twice in a row.
 
 set "PLMX_PROFILE="
 set "PLMX_ENVIRONMENT=!PLMX_HOME!environment.js"
-set "PLMX_LASTFILE=!PLMX_HOME!.plmx-last-profile"
-set /a PLMX_COUNT=0
 
-for /f "delims=" %%f in ('dir /b /a:-d "!PLMX_HOME!environments\*.js" 2^>nul ^| findstr /v /i /c:".backup-"') do (
-    if /i not "%%~nxf"=="template.js" (
-        set /a PLMX_COUNT+=1
-        set "PLMX_NAME_!PLMX_COUNT!=%%~nf"
-        set "PLMX_LABEL_!PLMX_COUNT!=%%~nf"
-        rem  Best effort only : the tenant is shown next to the file name so the user recognises the
-        rem  profile. A file written by hand may quote its values differently, in which case nothing
-        rem  matches and the plain file name is shown.
-        for /f "usebackq tokens=2 delims='" %%t in (`findstr /b /c:"exports.tenant" "!PLMX_HOME!environments\%%~nxf" 2^>nul`) do (
-            if not "%%t"==";" set "PLMX_LABEL_!PLMX_COUNT!=%%~nf   -   tenant %%t"
-        )
+if not exist "!PLMX_PROFILEFILE!" goto :eof
+
+set /p "PLMX_PROFILE="<"!PLMX_PROFILEFILE!"
+
+if not defined PLMX_PROFILE goto :eof
+
+rem  Only the characters the wizard allows in a profile name. Anything else is treated as a damaged
+rem  file, because the name is about to become part of a path.
+echo !PLMX_PROFILE!|findstr /r /c:"^[A-Za-z0-9_-][A-Za-z0-9_-]*$" >nul 2>&1
+if errorlevel 1 (
+    if not defined PLMX_SAIDIT (
+        echo.
+        echo   The remembered tenant name is not readable, starting on the default settings instead.
+        echo.
     )
+    set "PLMX_PROFILE="
+    goto :eof
 )
 
-if !PLMX_COUNT! EQU 0 goto :plmx_profile_ready
-
-set "PLMX_LAST="
-if exist "!PLMX_LASTFILE!" set /p "PLMX_LAST="<"!PLMX_LASTFILE!"
-
-set "PLMX_DEFAULT=0"
-if defined PLMX_LAST for /l %%i in (1,1,!PLMX_COUNT!) do if /i "!PLMX_NAME_%%i!"=="!PLMX_LAST!" set "PLMX_DEFAULT=%%i"
-
-set /a PLMX_TRIES=0
-
-
-:plmx_pick
-
-echo.
-echo   Which tenant do you want to work with?
-echo.
-
-for /l %%i in (1,1,!PLMX_COUNT!) do (
-    set "PLMX_MARK= "
-    if "%%i"=="!PLMX_DEFAULT!" set "PLMX_MARK=*"
-    echo    !PLMX_MARK!  %%i^)  !PLMX_LABEL_%%i!
-)
-
-set "PLMX_MARK= "
-if "0"=="!PLMX_DEFAULT!" set "PLMX_MARK=*"
-echo    !PLMX_MARK!  0^)  Default connection settings ^(environment.js^)
-
-echo.
-echo      *  marks what you used last time. Press Ctrl+C to close this window instead.
-echo.
-
-rem  set /p prints its prompt with the leading spaces removed, so the prompt below is written without
-rem  the indentation used everywhere else on purpose - it would be dropped anyway.
-set "PLMX_CHOICE="
-set /p "PLMX_CHOICE=Type a number and press Enter, or press Enter for !PLMX_DEFAULT! : "
-
-if not defined PLMX_CHOICE set "PLMX_CHOICE=!PLMX_DEFAULT!"
-
-rem  A typed double quote is removed before anything else looks at the answer. Left in place it would
-rem  unbalance the quoting of the comparisons below, and an unbalanced comparison is a syntax error that
-rem  cmd prints and then walks straight past, which is how a batch file ends up doing something random.
-set PLMX_CHOICE=!PLMX_CHOICE:"=!
-
-if not defined PLMX_CHOICE goto :plmx_pick_invalid
-
-rem  What was typed is proven to be nothing but digits here, before it reaches a command that could
-rem  treat any of it as syntax. Every digit is removed from a copy, and whatever is left has to be the
-rem  marker that copy started with. findstr is deliberately not used : piping to it starts two child
-rem  processes which inherit this window's input, and those swallow anything typed ahead. The marker
-rem  is not decoration either, it keeps the copy from ever becoming empty - expanding an undefined
-rem  variable with a replacement, !undefined:3=!, leaves the text 3= behind instead of nothing.
-set "PLMX_TEST=x!PLMX_CHOICE!"
-for %%d in (0 1 2 3 4 5 6 7 8 9) do set "PLMX_TEST=!PLMX_TEST:%%d=!"
-
-if not "!PLMX_TEST!"=="x" goto :plmx_pick_invalid
-if !PLMX_CHOICE! GTR !PLMX_COUNT! goto :plmx_pick_invalid
-
-for /f %%i in ("!PLMX_CHOICE!") do set "PLMX_PROFILE=!PLMX_NAME_%%i!"
-
-if not defined PLMX_PROFILE goto :plmx_profile_save
-
-set "PLMX_ENVIRONMENT=!PLMX_HOME!environments\!PLMX_PROFILE!.js"
-
-if not exist "!PLMX_ENVIRONMENT!" (
-    echo.
-    echo   The file environments\!PLMX_PROFILE!.js is not there any more. Please pick another entry.
-    goto :plmx_pick_retry
+if not exist "!PLMX_HOME!environments\!PLMX_PROFILE!.js" (
+    if not defined PLMX_SAIDIT (
+        echo.
+        echo   The tenant !PLMX_PROFILE! is no longer there, starting on the default settings instead.
+        echo   Open the setup wizard to choose another tenant.
+        echo.
+    )
+    set "PLMX_PROFILE="
+    goto :eof
 )
 
 rem  A profile whose file has a typo in it would otherwise end in a Node stack trace after the browser
 rem  has already been opened. Loading it here costs a few milliseconds and turns that into one sentence.
-"!PLMX_NODE!" -e "require(process.argv[1])" "!PLMX_ENVIRONMENT!" >nul 2>&1
+"!PLMX_NODE!" -e "require(process.argv[1])" "!PLMX_HOME!environments\!PLMX_PROFILE!.js" >nul 2>&1
 if errorlevel 1 (
-    echo.
-    echo   The file environments\!PLMX_PROFILE!.js cannot be read - it contains a typo, most likely a
-    echo   missing quote or semicolon. Open it in Notepad and compare it with environments\template.js,
-    echo   or pick another entry.
-    goto :plmx_pick_retry
+    if not defined PLMX_SAIDIT (
+        echo.
+        echo   The file environments\!PLMX_PROFILE!.js cannot be read - it contains a typo, most likely a
+        echo   missing quote or semicolon. Starting on the default settings instead.
+        echo.
+    )
+    set "PLMX_PROFILE="
+    goto :eof
 )
 
-goto :plmx_profile_save
+set "PLMX_ENVIRONMENT=!PLMX_HOME!environments\!PLMX_PROFILE!.js"
 
-
-:plmx_pick_invalid
-
-echo.
-echo   That was not one of the numbers in the list.
-
-:plmx_pick_retry
-
-set /a PLMX_TRIES+=1
-if !PLMX_TRIES! LSS 10 goto :plmx_pick
-
-rem  Reached when this window has no keyboard behind it at all, for example when the script is started
-rem  from a scheduler. Looping forever on an input that never arrives would leave a stuck process.
-echo.
-echo   No usable answer was given, starting with the default connection settings instead.
-set "PLMX_PROFILE="
-set "PLMX_ENVIRONMENT=!PLMX_HOME!environment.js"
-
-
-:plmx_profile_save
-
-rem  Remembered for the next start. The redirection is first on the line on purpose : a profile name
-rem  ending in a digit would turn "echo name>file" into a redirection of that stream number instead.
-rem  A folder the user cannot write to only costs the memory of the last choice, so the error is dropped.
-2>nul >"!PLMX_LASTFILE!" echo(!PLMX_PROFILE!
+goto :eof
 
 
 :plmx_profile_ready
@@ -302,9 +244,19 @@ start /b "" "!PLMX_SELF!" --open-browser !PLMX_URL!
 
 :plmx_launch
 
+rem  .plmx-profile is re-read on every pass, NOT just once before the loop. Switching tenant in the
+rem  setup wizard writes that file and ends the process with exit code 42, so this is what makes the
+rem  app come back up on the tenant the user just picked instead of the one it started with.
+rem
+rem  PLMX_SAIDIT is set on entry to this loop only, so that a complaint already printed by the read
+rem  above - the two reads of the first launch see the same file - is not repeated straight away. It
+rem  is cleared again below, because a LATER pass reads a file the wizard has just rewritten and a
+rem  problem with that new tenant does have to be reported.
+call :plmx_read_profile
+set "PLMX_SAIDIT="
+
 rem  The profile name is passed on as the only argument, which is what makes the server read
-rem  environments\<profile>.js instead of environment.js. It is deliberately re-read from the variable on
-rem  every pass of this loop, so the restart requested by the setup wizard keeps the same tenant.
+rem  environments\<profile>.js instead of environment.js.
 if defined PLMX_PROFILE (
     "!PLMX_NODE!" --max-http-header-size=16384 ".\bin\www" "!PLMX_PROFILE!"
 ) else (

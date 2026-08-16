@@ -277,14 +277,14 @@ html
                             .field-row
                                 input#save-mode-profile(type='radio' name='save-mode' value='profile')
                                 label(for='save-mode-profile') Save as a new tenant profile
-                            .field-hint A tenant profile keeps a second tenant next to this one. From then on the launcher asks which tenant to start with. Nothing about the tenant this server runs on right now is changed, and the server does not restart.
+                            .field-hint A tenant profile keeps a second tenant next to this one, and the list further down lets you switch between them at any time. Saving a profile changes nothing about the tenant this server runs on right now, and the server does not restart.
 
                         #profile-block
 
                             .field-block
                                 .field-label Name of the tenant profile
                                 input#profile-name(type='text' placeholder='tokyo-demo' spellcheck='false' autocomplete='off')
-                                .field-hint Letters a to z, digits, dashes and underscores only. It becomes the name of two files and the entry you pick in the launcher menu, so a name like tokyo-demo or customer-abc reads well there.
+                                .field-hint Letters a to z, digits, dashes and underscores only. It becomes the name of two files and the entry you pick in the list below, so a name like tokyo-demo or customer-abc reads well there.
                                 .field-error#error-profile-name
 
                             .field-message#profile-workspaces

@@ -33,48 +33,45 @@ you never have to create one if you only ever use a single tenant.
 4. Go to step 6, **Save and restart**.
 5. Under *Where should this be saved?* choose **Save as a new tenant profile** and type a name.
    Allowed are the letters a to z, digits, dashes and underscores - the name becomes a file name and
-   the entry you will pick in the launcher, so something like `tokyo-demo` or `customer-abc` works
+   the entry you will pick in the wizard list, so something like `tokyo-demo` or `customer-abc` works
    well. Japanese and Korean characters, spaces and dots are refused.
 6. Press **Save the tenant profile**.
 
 The server does not restart. It stays connected to the tenant it was started with, because a running
 server cannot swap its own connection settings. The new profile is simply there, ready to be picked
-the next time you start the app.
+and can be switched to from the same page.
 
 If a profile of that name already exists, the wizard says so and does nothing. Press Save a second
 time to confirm, and a timestamped backup of both files is kept next to the originals.
 
 
-## Choosing a tenant when you start the app
+## Switching tenant
 
-Start the app as usual with `Start.cmd` or the desktop shortcut.
+Switching happens in the setup wizard, not in the black console window. That window never asks you
+anything - the app always starts on whatever tenant the wizard recorded, so a colleague who only
+double-clicks the icon is never presented with a decision.
 
-As soon as at least one profile exists, the black console window shows a list before the server
-starts:
+1. Open the setup wizard - the gear in any application header, or `http://localhost:8080/setup`.
+2. Go to step 6, **Save and restart**, and look at **Tenant profiles on this server**.
+3. Every tenant this app can run on is listed there, including the default settings in
+   `environment.js`. The one currently running carries a green **running right now** badge.
+4. Press **Switch to this tenant** on the one you want.
 
-```
-  Which tenant do you want to work with?
+The app restarts itself and the page reloads on the new tenant, usually within a few seconds. Leave
+the console window open while that happens.
 
-      1)  customer-abc   -   tenant abccorp
-   *  2)  tokyo-demo     -   tenant adskyjyoo
-      3)  東京テナント    -   tenant tokyodemo
-      0)  Default connection settings (environment.js)
+The choice is remembered in a small file named `.plmx-profile` next to `Start.cmd`, so the next
+launch comes up on the same tenant. Deleting that file makes the app start on the default settings
+in `environment.js` again.
 
-     *  marks what you used last time. Press Ctrl+C to close this window instead.
+If the recorded tenant is missing or its file has a typo in it, the app says so in the console window
+and starts on the default settings rather than refusing to launch.
 
-Type a number and press Enter, or press Enter for 2 :
-```
+When you start the server yourself with `npm start` instead of the launcher, nothing supervises the
+process, so it cannot restart itself. The wizard records your choice and tells you to stop and start
+the server by hand. `npm start tokyo-demo` also still works and overrides the recorded tenant for
+that one run.
 
-Type the number and press Enter. Pressing Enter without typing anything starts the tenant you used
-last time, which is the one marked with `*`.
-
-- Entry `0` starts the app on `environment.js`, the settings that were there before you created any
-  profile.
-- If you type something that is not in the list, you are simply asked again.
-- Your choice is remembered in a small file named `.plmx-last-profile` next to `Start.cmd`. Deleting
-  that file only forgets which tenant you used last.
-- When the setup wizard restarts the server, it comes back on the **same** profile. You are not
-  asked again.
 
 If no profile exists at all, nothing is asked and the app starts straight away, exactly as it did
 before this feature existed.
@@ -111,8 +108,8 @@ Delete its two files:
 - `environments\<name>.js`
 - `settings\<name>.js`
 
-The profile disappears from the launcher list the next time you start the app. Nothing else refers
-to it. If the deleted profile happened to be the one you used last, the launcher falls back to the
+The profile disappears from the wizard list the next time you open it. Nothing else refers
+to it. If the deleted profile happened to be the one in use, the app falls back to the
 default entry.
 
 You can also delete the timestamped `*.backup-*.js` files in both folders at any time. They are
@@ -121,7 +118,7 @@ copies the wizard kept before overwriting something, and they are never offered 
 
 ## For anyone who does use a terminal
 
-The launcher only automates what the server already supported: the name of the environment file is
+The wizard only automates what the server already supported: the name of the environment file is
 its first argument.
 
 ```

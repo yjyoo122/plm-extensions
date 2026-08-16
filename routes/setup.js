@@ -760,7 +760,7 @@ function saveProfile(req, res, values, ids, profile, files, warnings) {
         is not connected to the tenant, when it plainly is and the header says so, reads as a
         bug in the wizard and leaves the user with no idea what to do next.                   */
     if(!discovered && !sameTenant) {
-        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0. Workspace ids differ from tenant to tenant, and the ids on this page belong to ' + blankToEmpty(locals.tenant) + ', not to ' + values.tenant + '. Start the app again, choose ' + profile + ' in the launcher, then open this wizard and run the workspace discovery.');
+        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0. Workspace ids differ from tenant to tenant, and the ids on this page belong to ' + blankToEmpty(locals.tenant) + ', not to ' + values.tenant + '. Switch to ' + profile + ' in the list on this page, then run the workspace discovery.');
     } else if(!discovered) {
         warnings.push('Every workspace id of the profile ' + profile + ' was written as 0, because the workspace discovery was not run before saving. Open step 5, run Discover workspaces, then save the profile again - or start the app on ' + profile + ' and run the discovery there.');
     }
@@ -830,6 +830,69 @@ function saveProfile(req, res, values, ids, profile, files, warnings) {
     });
 
 }
+
+
+/* ------------------------------------------------------------------------------
+    SWITCHING TENANT
+
+    The launcher never asks which tenant to use - it reads the name recorded in
+    .plmx-profile and starts on it. Switching therefore means writing that file
+    and ending the process with exit code 42, which the supervisor in Start.cmd
+    answers by relaunching, re-reading the file, and coming back up on the tenant
+    picked here. An empty name means the default settings in environment.js.
+
+    Without a supervisor - somebody who started the server with npm start - the
+    file is still written, but the process stays up and the page says that the
+    app has to be restarted by hand.
+   ------------------------------------------------------------------------------ */
+router.post('/activate', function(req, res, next) {
+
+    if(!isSameOriginRequest(req)) {
+        return res.status(403).json({ ok : false, message : 'This request did not come from the setup wizard page.' });
+    }
+
+    let body    = (typeof req.body === 'object' && req.body !== null) ? req.body : {};
+    let profile = String(blankToEmpty(body.profile)).trim();
+
+    if(profile !== '') {
+
+        if(!profileChars.test(profile) || (profile.length > profileMaximum)) {
+            return res.status(400).json({ ok : false, message : 'That tenant name is not valid.' });
+        }
+
+        if(!fs.existsSync(path.join(pathEnvironments, profile + '.js'))) {
+            return res.status(400).json({ ok : false, message : 'The tenant ' + profile + ' does not exist any more. Please reload this page.' });
+        }
+
+    }
+
+    let supervised = isSupervised();
+
+    try {
+        //  An empty file is the documented way of saying "the default settings", so an empty
+        //  name writes an empty file rather than deleting it - the launcher treats both alike.
+        fs.writeFileSync(path.join(pathRoot, '.plmx-profile'), profile, 'utf8');
+    } catch(error) {
+        return res.status(500).json({ ok : false, message : 'The chosen tenant could not be recorded : ' + error.message });
+    }
+
+    res.json({
+        ok         : true,
+        profile    : profile,
+        supervised : supervised,
+        restarting : supervised
+    });
+
+    if(supervised) {
+        setTimeout(function() {
+            console.log();
+            console.log('  Switching to ' + ((profile === '') ? 'the default connection settings' : 'the tenant profile ' + profile));
+            console.log();
+            process.exit(42);
+        }, 750);
+    }
+
+});
 
 
 /* ------------------------------------------------------------------------------
@@ -995,7 +1058,7 @@ function renderEnvironment(values, profile) {
 
     if(!isBlank(profile)) {
         lines.push('// ---------------------------------------------------------------------------------------------------------------------------');
-        lines.push('//  This is the tenant profile ' + profile + '. Start the app and choose ' + profile + ' in the menu of the launcher to use');
+        lines.push('//  This is the tenant profile ' + profile + '. Open the setup wizard and switch to ' + profile + ' to use');
         lines.push('//  these settings, or start the server with "npm start ' + profile + '". Its workspace ids are in settings/' + profile + '.js,');
         lines.push('//  because workspace ids are numbered per tenant. Deleting both files removes the profile.');
     }

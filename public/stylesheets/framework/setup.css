@@ -309,6 +309,17 @@
     font-size  : 12px;
     margin-top : 4px;
 }
+.profile-switch {
+    font-size   : 12px;
+    line-height : 24px;
+    margin-left : auto;
+    padding     : 0 12px;
+    white-space : nowrap;
+}
+.profile-switch.disabled {
+    opacity        : 0.5;
+    pointer-events : none;
+}
 
 .field-hint {
     color       : var(--color-gray-600);

@@ -412,7 +412,7 @@ function updateProfileHeader(response) {
 
         if(setupProfiles.length === 0) return;
 
-        elem.text('You are editing the default settings in environment.js. ' + setupProfiles.length + ' tenant profile(s) exist next to it, pick one in the launcher window when you start the app.');
+        elem.text('You are editing the default settings in environment.js. ' + setupProfiles.length + ' tenant profile(s) exist next to it. Use the list further down on this page to switch between them.');
 
         return;
 
@@ -437,7 +437,7 @@ function renderProfileList() {
     for(let profile of setupProfiles) entries.push(profile);
 
     if(entries.length === 0) {
-        list.append($('<div></div>').addClass('field-hint').text('No tenant profile exists yet. The launcher only asks which tenant to use once at least one profile is there.'));
+        list.append($('<div></div>').addClass('field-hint').text('No tenant profile exists yet. Save one below to keep a second tenant next to this one, then switch between them from here.'));
         return;
     }
 
@@ -470,6 +470,17 @@ function renderProfileList() {
             line.append($('<span></span>').addClass('profile-tenant-name').attr('data-i18n-skip', '').text(entry.tenant));
         }
 
+        /*  Switching is done here rather than in the launcher window : that window is not where a
+            non-technical user should be making decisions. The button records the choice and the
+            server restarts itself onto it, exactly like saving the connection settings does.     */
+        if(!entry.active) {
+            head.append($('<div></div>')
+                .addClass('button').addClass('profile-switch')
+                .attr('data-profile', entry.isDefault ? '' : entry.name)
+                .text('Switch to this tenant')
+                .click(function() { activateProfile($(this).attr('data-profile'), $(this)); }));
+        }
+
         card.append(line);
 
         /*  Two entries on the same tenant are almost always a slip : the tenant field was left
@@ -498,6 +509,53 @@ function renderProfileList() {
         list.append(card);
 
     }
+
+}
+function activateProfile(profile, elemButton) {
+
+    if(setupSaving) return;
+
+    setupSaving = true;
+
+    $('.profile-switch').addClass('disabled');
+    elemButton.text('Switching ...');
+
+    $.ajax({
+        url         : '/setup/activate',
+        method      : 'POST',
+        contentType : 'application/json',
+        dataType    : 'json',
+        data        : JSON.stringify({ profile : profile })
+    }).done(function(response) {
+
+        let info = $('#restart-info').addClass('visible').empty();
+
+        if(!response.supervised) {
+            setupSaving = false;
+            $('.profile-switch').removeClass('disabled');
+            renderProfileList();
+            info.append($('<div></div>').text('The tenant was recorded, but this server was not started by the Windows launcher, so it cannot restart itself. Please close the console window of the server and start the application again.'));
+            return;
+        }
+
+        info.append($('<div></div>').attr('id', 'restart-state').text('Switching tenant. This page reloads automatically as soon as the server is back, usually within a few seconds. Please leave the console window of the server open.'));
+
+        startPolling();
+
+    }).fail(function(xhr) {
+
+        setupSaving = false;
+        $('.profile-switch').removeClass('disabled');
+
+        let message = 'The tenant could not be switched.';
+
+        if(xhr && xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
+
+        $('#restart-info').addClass('visible').empty().append($('<div></div>').addClass('error').text(message));
+
+        renderProfileList();
+
+    });
 
 }
 function isNewProfileMode() {
@@ -585,7 +643,7 @@ function updateProfileWorkspaces() {
         return;
     }
 
-    message.text('The new profile starts with all workspace ids set to 0, because workspace ids are numbered per tenant and the ones on this page belong to the tenant this server is connected to. Save the profile, close the app, start it again and choose the profile in the launcher window - then come back to step 5 here and run Discover workspaces. Until that is done the applications open with empty lists.');
+    message.text('The new profile starts with all workspace ids set to 0, because workspace ids are numbered per tenant and the ones on this page belong to the tenant this server is connected to. Save the profile, switch to it in the list below, then come back to step 5 and run Discover workspaces. Until that is done the applications open with empty lists.');
 
 }
 
@@ -1232,7 +1290,7 @@ function showProfileInfo(response) {
     let info = $('#restart-info').addClass('visible').empty();
 
     info.append($('<div></div>').text('The tenant profile ' + response.savedProfile + ' was saved. This server keeps running on the tenant it was started with - nothing about it has changed.'));
-    info.append($('<div></div>').text('To use the new profile : close the black console window of the app, start it again, and choose ' + response.savedProfile + ' in the list the launcher now shows.'));
+    info.append($('<div></div>').text('To use it now, press Switch to this tenant next to ' + response.savedProfile + ' in the list below. The app restarts itself on that tenant.'));
 
     if(Array.isArray(response.warnings)) {
         for(let warning of response.warnings) {
