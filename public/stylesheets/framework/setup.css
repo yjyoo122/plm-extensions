@@ -241,6 +241,75 @@
     color : var(--color-gray-500);
 }
 
+/*  TENANT PROFILE CARDS
+    -----------------------------------------------------------------------------
+    One card per tenant this server can be started with, including the default
+    connection settings. Each card names both roles - the profile name and the
+    Fusion Manage tenant behind it - because the earlier two column layout was
+    read as two separate tenants rather than as one entry.                       */
+.profile-card {
+    background    : var(--color-surface-level-3);
+    border        : 1px solid var(--color-surface-level-5);
+    border-left   : 4px solid var(--color-surface-level-5);
+    border-radius : 4px;
+    margin-top    : 8px;
+    padding       : 10px 14px;
+}
+.profile-card.active {
+    border-left-color : var(--color-status-green);
+}
+.profile-card-head {
+    align-items : center;
+    display     : flex;
+    flex-wrap   : wrap;
+    gap         : 10px;
+}
+.profile-name {
+    color       : var(--color-font);
+    font-size   : 15px;
+    font-weight : 600;
+}
+.profile-tag,
+.profile-badge {
+    border-radius : 10px;
+    font-size     : 11px;
+    line-height   : 18px;
+    padding       : 0 10px;
+    white-space   : nowrap;
+}
+.profile-tag {
+    background : var(--color-surface-level-5);
+    color      : var(--color-gray-500);
+}
+.profile-badge {
+    background  : var(--color-status-green);
+    color       : #ffffff;
+    font-weight : 600;
+}
+.profile-tenant {
+    align-items : baseline;
+    display     : flex;
+    flex-wrap   : wrap;
+    gap         : 8px;
+    margin-top  : 4px;
+}
+.profile-tenant-label {
+    color     : var(--color-gray-600);
+    font-size : 12px;
+}
+.profile-tenant-name {
+    color       : var(--color-font);
+    font-weight : 600;
+}
+.profile-warning {
+    color : var(--color-status-yellow);
+}
+.profile-note {
+    color      : var(--color-status-yellow);
+    font-size  : 12px;
+    margin-top : 4px;
+}
+
 .field-hint {
     color       : var(--color-gray-600);
     line-height : 18px;

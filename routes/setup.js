@@ -262,10 +262,22 @@ router.get('/status', function(req, res, next) {
 router.get('/profiles', function(req, res, next) {
 
     let active = getActiveProfile();
+    let locals = req.app.locals;
 
+    /*  The default connection settings are a tenant this server can be started with just
+        like any profile, and the launcher offers them as entry 0. Leaving them out of this
+        list made it read as if the profiles were everything there is, so they are reported
+        as an entry of their own and the page can show one complete list.                  */
     res.json({
         active       : active,
         usingDefault : (active === ''),
+        defaultEntry : {
+            name     : path.basename(getEnvironmentPath()),
+            tenant   : blankToEmpty(locals.tenant),
+            active   : (active === ''),
+            readable : true,
+            isDefault: true
+        },
         profiles     : listProfiles()
     });
 
@@ -744,8 +756,13 @@ function saveProfile(req, res, values, ids, profile, files, warnings) {
     let discovered = ((ids !== null) && sameTenant);
     let profileIds = discovered ? ids : zeroWorkspaceIds();
 
-    if(!discovered) {
-        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0, because workspace ids are different in every tenant and this server is not connected to ' + values.tenant + '. Start the app again, choose ' + profile + ' in the launcher, then open this wizard and run the workspace discovery.');
+    /*  Two different reasons end up here and they need different sentences. Saying the server
+        is not connected to the tenant, when it plainly is and the header says so, reads as a
+        bug in the wizard and leaves the user with no idea what to do next.                   */
+    if(!discovered && !sameTenant) {
+        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0. Workspace ids differ from tenant to tenant, and the ids on this page belong to ' + blankToEmpty(locals.tenant) + ', not to ' + values.tenant + '. Start the app again, choose ' + profile + ' in the launcher, then open this wizard and run the workspace discovery.');
+    } else if(!discovered) {
+        warnings.push('Every workspace id of the profile ' + profile + ' was written as 0, because the workspace discovery was not run before saving. Open step 5, run Discover workspaces, then save the profile again - or start the app on ' + profile + ' and run the discovery there.');
     }
 
     values.settings = profile + '.js';

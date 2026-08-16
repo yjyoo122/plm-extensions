@@ -19,6 +19,7 @@ let setupPollAttempts = 0;
 let setupSavedTenant  = '';
 let setupSavedClientId = '';
 let setupProfiles     = [];
+let setupDefaultEntry = null;
 let setupOverwrite    = '';
 let setupAdminTest    = 0;
 
@@ -382,7 +383,8 @@ function loadProfiles() {
         dataType : 'json'
     }).done(function(response) {
 
-        setupProfiles = Array.isArray(response.profiles) ? response.profiles : [];
+        setupProfiles     = Array.isArray(response.profiles) ? response.profiles : [];
+        setupDefaultEntry = ((typeof response.defaultEntry === 'object') && (response.defaultEntry !== null)) ? response.defaultEntry : null;
 
         updateProfileHeader(response);
         renderProfileList();
@@ -391,7 +393,8 @@ function loadProfiles() {
 
     }).fail(function() {
 
-        setupProfiles = [];
+        setupProfiles     = [];
+        setupDefaultEntry = null;
 
         updateProfileHeader(null);
         renderProfileList();
@@ -418,32 +421,81 @@ function updateProfileHeader(response) {
     elem.text('You are editing the tenant profile ' + response.active + ' in environments/' + response.active + '.js. Everything saved here applies to that profile only.');
 
 }
+/*  The list used the same two column layout as the summary table above it, a quiet label
+    next to a quiet value. Two names sitting side by side with no heading read as two
+    separate tenants rather than as one entry - the name the user chose and the tenant it
+    points at. Every entry is now one bordered card that names both roles explicitly, the
+    entry currently running carries a badge, and the default connection settings appear in
+    the same list because the launcher offers them as a choice just like a profile.       */
 function renderProfileList() {
 
-    let list = $('#profile-list').empty();
+    let list    = $('#profile-list').empty();
+    let entries = [];
 
-    if(setupProfiles.length === 0) {
+    if(setupDefaultEntry !== null) entries.push(setupDefaultEntry);
+
+    for(let profile of setupProfiles) entries.push(profile);
+
+    if(entries.length === 0) {
         list.append($('<div></div>').addClass('field-hint').text('No tenant profile exists yet. The launcher only asks which tenant to use once at least one profile is there.'));
         return;
     }
 
-    for(let profile of setupProfiles) {
+    for(let entry of entries) {
 
-        let row   = $('<div></div>').addClass('summary-row');
-        let value = '';
+        let card = $('<div></div>').addClass('profile-card');
+        let head = $('<div></div>').addClass('profile-card-head');
+
+        if(entry.active) card.addClass('active');
 
         // data-i18n-skip keeps the translation engine away from the names the user chose
         // and from the tenant names of their customers.
-        if(!profile.readable)          value = 'this file cannot be read, please open it in Notepad and compare it with environments/template.js';
-        else if(profile.tenant === '') value = 'no tenant is set in this file yet';
-        else                           value = profile.tenant;
+        head.append($('<div></div>').addClass('profile-name').attr('data-i18n-skip', '').text(entry.name));
 
-        row.append($('<div></div>').addClass('summary-label').attr('data-i18n-skip', '').text(profile.name));
-        row.append($('<div></div>').addClass('summary-value').text(value));
+        if(entry.isDefault) head.append($('<div></div>').addClass('profile-tag').text('default settings'));
 
-        if(profile.active) row.append($('<div></div>').addClass('summary-value').text('in use right now'));
+        if(entry.active) head.append($('<div></div>').addClass('profile-badge').text('running right now'));
 
-        list.append(row);
+        card.append(head);
+
+        let line = $('<div></div>').addClass('profile-tenant');
+
+        line.append($('<span></span>').addClass('profile-tenant-label').text('Fusion Manage tenant'));
+
+        if(!entry.readable) {
+            line.append($('<span></span>').addClass('profile-warning').text('this file cannot be read, please open it in Notepad and compare it with environments/template.js'));
+        } else if(entry.tenant === '') {
+            line.append($('<span></span>').addClass('profile-warning').text('no tenant is set in this file yet'));
+        } else {
+            line.append($('<span></span>').addClass('profile-tenant-name').attr('data-i18n-skip', '').text(entry.tenant));
+        }
+
+        card.append(line);
+
+        /*  Two entries on the same tenant are almost always a slip : the tenant field was left
+            as it was while only the profile name got changed. Nothing is broken by it, but the
+            launcher would then offer two entries that reach the same place, so it is said out
+            loud here rather than left for the user to spot by comparing names.                */
+        if(entry.readable && (entry.tenant !== '')) {
+
+            let twins = [];
+
+            for(let other of entries) {
+                if(other === entry)             continue;
+                if(other.tenant !== entry.tenant) continue;
+                twins.push(other.name);
+            }
+
+            if(twins.length > 0) {
+                let note = $('<div></div>').addClass('profile-note');
+                note.append($('<span></span>').text('This points at the same tenant as'));
+                note.append($('<span></span>').attr('data-i18n-skip', '').text(' ' + twins.join(', ')));
+                card.append(note);
+            }
+
+        }
+
+        list.append(card);
 
     }
 
