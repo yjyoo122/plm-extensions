@@ -180,6 +180,57 @@
         else                      elemControl.appendTo(elemToolbar);
 
         translate(elemControl);
+        followToolbar(elemToolbar, elemControl);
+
+    }
+
+
+    /*  MIRROR THE VISIBILITY OF THE APPLICATION'S OWN HEADER BUTTONS
+        -----------------------------------------------------------------------------
+        The wrapper above deliberately keeps this control out of every
+        $('#header-toolbar').children('.button') selection, which is what stops the
+        applications from binding their own handlers to it. The cost is that the rules
+        those applications use to hide their toolbar - '#header-toolbar > .button
+        { display : none }' in the Client Portal and the configurator, and the
+        .hidden toggling in the Design Reviews portal - do not reach it either, so the
+        gear would stay behind on a header that is meant to be empty. Rather than
+        editing three application files, the control simply follows whatever happened
+        to its siblings.                                                              */
+
+    function followToolbar(elemToolbar, elemControl) {
+
+        function sync() {
+
+            let siblings = elemToolbar.children('.button');
+
+            if(siblings.length === 0) return;
+
+            let visible = false;
+
+            siblings.each(function() {
+                if(window.getComputedStyle(this).display !== 'none') visible = true;
+            });
+
+            elemControl.toggleClass('hidden', !visible);
+
+        }
+
+        sync();
+
+        //  The stylesheet of the application may still be loading, and the applications
+        //  toggle .hidden long after startup, so the state is re-read on both occasions.
+        window.requestAnimationFrame(sync);
+
+        if(typeof window.MutationObserver === 'undefined') return;
+
+        let observer = new MutationObserver(guard('toolbar', sync));
+
+        observer.observe(elemToolbar.get(0), {
+            attributes      : true,
+            attributeFilter : ['class', 'style'],
+            subtree         : true,
+            childList       : true
+        });
 
     }
 

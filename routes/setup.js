@@ -112,6 +112,22 @@ function isLoopbackRequest(req) {
     return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].indexOf(address) > -1;
 
 }
+/*  A reverse proxy sitting on the same host - which is the normal shape of a cloud deployment -
+    makes EVERY request arrive from 127.0.0.1, so the loopback test above would hand the wizard,
+    and with it write access to environment.js, to anyone on the internet. A browser talking to
+    localhost directly never sends these headers, a proxy always adds at least one of them, so
+    their presence is treated as proof that the request was forwarded and is refused.          */
+const forwardedHeaders = ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'forwarded'];
+
+function isForwardedRequest(req) {
+
+    for(let name of forwardedHeaders) {
+        if(typeof req.headers[name] !== 'undefined') return true;
+    }
+
+    return false;
+
+}
 function isSameOriginRequest(req) {
 
     // Being on loopback is not enough for a request which writes files : the browser of
@@ -130,10 +146,10 @@ function isSameOriginRequest(req) {
 }
 router.use(function(req, res, next) {
 
-    if(isLoopbackRequest(req)) return next();
+    if(isLoopbackRequest(req) && !isForwardedRequest(req)) return next();
 
     console.log();
-    console.log('  /setup : request rejected, remote address is not loopback');
+    console.log('  /setup : request rejected, ' + (isForwardedRequest(req) ? 'it was forwarded by a proxy' : 'remote address is not loopback'));
     console.log();
 
     res.status(403).send('The setup wizard can only be used on the machine running this server.');
