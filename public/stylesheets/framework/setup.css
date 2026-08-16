@@ -176,6 +176,71 @@
     display     : flex;
     gap         : 10px;
 }
+
+/*  RADIO BUTTONS
+    -----------------------------------------------------------------------------
+    basic.css styles every input for text entry - it sets a surface background,
+    removes the border and adds 8px of padding. On a radio that erases the ring,
+    so an UNSELECTED radio became invisible against a dark page and the only mark
+    on screen was the dot of the selected one, which then reads as a stray
+    checkbox rather than as one of two choices. The control is therefore drawn
+    here from scratch: an always visible ring, filled when selected.             */
+.field-row input[type='radio'] {
+    -webkit-appearance : none;
+    appearance         : none;
+    background         : transparent;
+    border             : 2px solid var(--color-gray-500);
+    border-radius      : 50%;
+    cursor             : pointer;
+    flex               : 0 0 auto;
+    height             : 18px;
+    margin             : 0;
+    padding            : 0;
+    position           : relative;
+    width              : 18px;
+}
+.field-row input[type='radio']:hover {
+    border-color : var(--color-blue-500);
+}
+.field-row input[type='radio']:focus-visible {
+    outline        : 2px solid var(--color-blue-500);
+    outline-offset : 2px;
+}
+/*  basic.css:79 forces background-color and border-color with !important on a checked
+    radio, which paints the whole control white and leaves the dot invisible. Matching
+    !important here is the only way to win, and the selector stays inside .field-row so
+    radios everywhere else in the framework keep the appearance they have today.       */
+.field-row input[type='radio']:checked {
+    background-color : transparent !important;
+    border-color     : var(--color-blue-500) !important;
+}
+.field-row input[type='radio']:checked::after {
+    background    : var(--color-blue-500);
+    border-radius : 50%;
+    content       : '';
+    height        : 10px;
+    left          : 50%;
+    position      : absolute;
+    top           : 50%;
+    transform     : translate(-50%, -50%);
+    width         : 10px;
+}
+.field-row label {
+    cursor : pointer;
+}
+
+/*  The option actually in effect is the one the user has to be sure about, so its
+    label carries the weight and the full font colour while the alternative stays
+    quiet. Without this both choices read identically and the selection is carried
+    by an 18px dot alone.                                                         */
+.field-row input[type='radio']:checked + label {
+    color       : var(--color-font);
+    font-weight : 600;
+}
+.field-row input[type='radio']:not(:checked) + label {
+    color : var(--color-gray-500);
+}
+
 .field-hint {
     color       : var(--color-gray-600);
     line-height : 18px;
