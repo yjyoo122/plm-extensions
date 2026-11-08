@@ -1143,3 +1143,14 @@ select.view-selector {
 }
 #mbom-chooser > #recents { left  : var(--padding-chooser-h); }
 #mbom-chooser > #search  { left  : calc(var(--padding-chooser-h) * 2 + var(--width-chooser-list)); }
+
+
+/* -----------------------------------------------------------------------------------------
+   UNDO / REDO  (see mbom-history.js). The framework font has undo but no redo class.
+   ----------------------------------------------------------------------------------------- */
+.icon-redo::before { content : '\e15a'; }
+#undo.disabled,
+#redo.disabled {
+    cursor  : default;
+    opacity : 0.35;
+}

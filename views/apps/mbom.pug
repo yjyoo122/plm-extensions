@@ -6,6 +6,7 @@ block head
     link(rel='stylesheet', href='/stylesheets/custom/mbom.css')
     script(src='/javascripts/libs/jquery-ui-1.12.1/jquery-ui.min.js')
     script(src='/javascripts/apps/mbom.js')
+    script(src='/javascripts/apps/mbom-history.js')
     script(src='/javascripts/custom/mbom.js')
     script.
         config = !{JSON.stringify(config)};
@@ -21,6 +22,8 @@ block body
             #header-toolbar
                 #save.button.default(title='Apply changes to the database') Save
                 #reset.button.with-icon.icon-refresh(title='Reset all changes by reloading the editor') Reset
+                #undo.button.icon.icon-undo.disabled(title='Undo the last change (Ctrl+Z)')
+                #redo.button.icon.icon-redo.disabled(title='Redo the change you undid (Ctrl+Y)')
                 #export.button.with-icon.icon-download.hidden(title='Export list of purchased parts to Excel') Purchased Parts
                 #toggle-details.button.with-toggle.toggle-off(title='Click to toggle details panel on/off') Details Panel
                 #header-avatar

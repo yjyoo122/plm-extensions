@@ -1937,6 +1937,7 @@ exports.i18n = {
     showSwitcher    : true,     // show the language selector in the header / landing page
     skipSelectors   : [         // CSS selectors whose contents must never be translated (PLM data regions)
         '.item-title',
+        '.item-head-descriptor',
         '.item-code',
         '.tree-column-make_or_buy',
         '#workspace option'

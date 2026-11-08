@@ -187,6 +187,7 @@ function setUIEvents() {
     })
     $('#reset').click(function() { reloadPage(); });  
     $('#save').click(function() {
+        if(typeof mbomHistoryPause === 'function') mbomHistoryPause();
         setSaveActions();
         showSaveProcessingDialog();
         createNewItems();
@@ -846,34 +847,97 @@ function initEditor() {
 
     let elemMBOMRootBOM = $('#mbom-tree').find('.item-bom').first();
         elemMBOMRootBOM.attr('id', 'mbom-root-bom');
-        elemMBOMRootBOM.sortable({
 
-            delay       : 250,
-            opacity     : 0.4,
-            cursor      : 'move',
-            cursorAt    : { left : 50, top : 15 },
-            items       : '.item',
-            placeholder : "sortable-placeholder",
-            stop        : function(event, ui) {
+    initMBOMSortable(elemMBOMRootBOM);
 
-                if(elemBOMDropped !== null) {
-                    $(this).sortable('cancel');
-                    ui.item.appendTo(elemBOMDropped);
-                    elemBOMDropped = null;
-                } else {
-                    updateViewer();
-                    moveItemInBOM(ui.item);
+    $('.bar').show();
+
+    if(typeof mbomHistoryStart === 'function') mbomHistoryStart();
+    
+}
+// Drop target on the head of a process node. Kept in one place so that the undo history in
+// mbom-history.js can re-create it identically on nodes it restores (see mbomHistoryRestore).
+function initMBOMDroppable(elemNodeHead) {
+
+    elemNodeHead.droppable({
+
+        classes: {
+            'ui-droppable-hover': 'drop-hover'
+        },
+        drop : function(event, ui) {
+
+            let itemDragged      = ui.draggable;
+            let isAdditionalItem = itemDragged.hasClass('additional-item');
+            let link             = itemDragged.attr('data-link');
+            let isNew            = true;
+
+            elemBOMDropped = $(this).next();
+
+            elemBOMDropped.children('.item').each(function() {
+
+                if($(this).attr('data-link') === link) {
+
+                    isNew = false;
+                    let elemInput = $(this).find('input.item-qty-input');
+                    let qty = elemInput.val();
+
+                    if(isAdditionalItem)  {
+                        qty++;
+                    } else  {
+                        let elemQtyAdd = itemDragged.find('input.item-qty-input');
+                        qty += elemQtyAdd.val();
+                        itemDragged.remove();
+                    }
+
+                    elemInput.val(qty);
+
                 }
+            });
 
-                updateMBOMNumbers();
-                selectAdjacentMBOMModels();
+            if(isAdditionalItem) {
+
+                if(isNew) insertAdditionalItem($(this), itemDragged.attr('data-link'));
 
             }
 
-        });
+            updateMBOMNumbers();
+            selectAdjacentMBOMModels();
 
-    $('.bar').show();
-    
+        }
+    });
+
+}
+
+// Reordering by drag & drop within the MBOM. Kept in one place for the same reason as
+// initMBOMDroppable : the undo history has to re-create it on a restored tree.
+function initMBOMSortable(elemMBOMRootBOM) {
+
+    elemMBOMRootBOM.sortable({
+
+        delay       : 250,
+        opacity     : 0.4,
+        cursor      : 'move',
+        cursorAt    : { left : 50, top : 15 },
+        items       : '.item',
+        placeholder : "sortable-placeholder",
+        stop        : function(event, ui) {
+
+            if(elemBOMDropped !== null) {
+                $(this).sortable('cancel');
+                ui.item.appendTo(elemBOMDropped);
+                elemBOMDropped = null;
+            } else {
+                updateViewer();
+                moveItemInBOM(ui.item);
+            }
+
+            updateMBOMNumbers();
+            selectAdjacentMBOMModels();
+
+        }
+
+    });
+
 }
 function moveItemInBOM(elemItem) {
 
@@ -1095,53 +1159,7 @@ function insertBOMPartListNode(bomType, index, node) {
 
             // if(level === 2)  {
 
-                // elemNodeBOM.droppable({
-                elemNodeHead.droppable({
-                    
-                    classes: {
-                        'ui-droppable-hover': 'drop-hover'
-                    },
-                    drop : function(event, ui) {
-
-                        let itemDragged      = ui.draggable;
-                        let isAdditionalItem = itemDragged.hasClass('additional-item');
-                        let link             = itemDragged.attr('data-link');
-                        let isNew            = true;
-
-                        elemBOMDropped = $(this).next();
-
-                        elemBOMDropped.children('.item').each(function() {
-
-                            if($(this).attr('data-link') === link) {
-                                
-                                isNew = false;
-                                let elemInput = $(this).find('input.item-qty-input');
-                                let qty = elemInput.val();
-                                
-                                if(isAdditionalItem)  {
-                                    qty++;
-                                } else  {
-                                    let elemQtyAdd = itemDragged.find('input.item-qty-input');
-                                    qty += elemQtyAdd.val();
-                                    itemDragged.remove();
-                                }
-
-                                elemInput.val(qty);
-
-                            }
-                        });
-
-                        if(isAdditionalItem) {
-
-                            if(isNew) insertAdditionalItem($(this), itemDragged.attr('data-link'));
-                    
-                        }
-
-                        updateMBOMNumbers();
-                        selectAdjacentMBOMModels();
-
-                    }
-                });
+                initMBOMDroppable(elemNodeHead);
 
         // }
             
@@ -1327,6 +1345,11 @@ function insertTileActions(elemActions, bomType) {
         
             e.stopPropagation();
             e.preventDefault();
+
+            if($('#mbom').find('.selected-target').length === 0) {
+                showErrorMessage('No target selected', 'Select the process the component should go to first, then copy it again.');
+                return;
+            }
 
             let item        = $(this).closest('.item');
             let itemName    = item.find('.item-head-descriptor').first().html();
@@ -1921,8 +1944,12 @@ function insertFromEBOMToMBOM(elemAction) {
         }
     }
 
+    // Clicking the selected process a second time deselects it, after which no node carries
+    // .selected-target. Assigning the empty selection unconditionally replaced the root fallback
+    // above, and the component was then appended to nothing - the click silently did nothing.
     if(!processMatch) {
-        elemTarget = $('.selected-target');
+        let elemSelected = $('#mbom').find('.selected-target');
+        if(elemSelected.length > 0) elemTarget = elemSelected.first();
     }
     
     if(elemTarget !== null) {   
@@ -2057,6 +2084,9 @@ function setEBOMEndItem() {
 
             } else {
 
+                // Already written to Fusion Manage - the undo history cannot step back past this.
+                if(typeof mbomHistoryCheckpoint === 'function') mbomHistoryCheckpoint();
+
                 let elemItem        = $('.item.to-end');
                 let elemItemHead    = elemItem.children('.item-head');
                 let elemItemToggle  = elemItemHead.children('.item-toggle');
@@ -2115,6 +2145,9 @@ function insertEBOMtoMBOM() {
                 showErrorMessage('Error', 'Error while updating item with Matches MBOM flag');
 
             } else {
+
+                // Already written to Fusion Manage - the undo history cannot step back past this.
+                if(typeof mbomHistoryCheckpoint === 'function') mbomHistoryCheckpoint();
 
                 let elemItem        = $('.item.to-insert');
                 let elemItemHead    = elemItem.children('.item-head');
@@ -2516,8 +2549,8 @@ function insertMBOMSelectEvent(elemItem) {
         e.preventDefault();
         selectBOMItem($(this), false);
         if(config.displayOptions.tabOperations) {
-            insertSourcing(elemItem.attr('data-link'), paramsoperationsSourcing);
-            insertGrid(elemItem.attr('data-link') , paramsoperationsGrid );
+            insertSourcing($(this).attr('data-link'), paramsoperationsSourcing);
+            insertGrid($(this).attr('data-link') , paramsoperationsGrid );
         }
     });
 
@@ -3334,9 +3367,19 @@ function confirmTemplate() {
 
 // Drag & Drop functions
 function moveItemQuantity() {
-    
+
+    // Without a selected target the copy would be appended to nothing - and Move would then still
+    // reduce or remove the original, so the component silently disappeared from the MBOM.
+    let elemTarget  = $('#mbom').find('.selected-target').first();
+
+    if(elemTarget.length === 0) {
+        $('#copy-cancel').click();
+        showErrorMessage('No target selected', 'Select the process the component should go to first, then copy it again.');
+        return;
+    }
+
     let elemItem    = $('.to-move');
-    let elemBOM     = $('.selected-target').children('.item-bom');
+    let elemBOM     = elemTarget.children('.item-bom');
     let exists      = itemExistsInBOM(elemItem, elemBOM);
     let qtyMove     = $('#copy-qty').val();
     let qtyNew      = elemItem.find('.item-qty-input').val() - $('#copy-qty').val();
@@ -3365,9 +3408,19 @@ function moveItemQuantity() {
 
 }
 function addItemQuantity() {
-    
+
+    // Without a selected target the copy would be appended to nothing - and Move would then still
+    // reduce or remove the original, so the component silently disappeared from the MBOM.
+    let elemTarget  = $('#mbom').find('.selected-target').first();
+
+    if(elemTarget.length === 0) {
+        $('#copy-cancel').click();
+        showErrorMessage('No target selected', 'Select the process the component should go to first, then copy it again.');
+        return;
+    }
+
     let elemItem    = $('.to-move');
-    let elemBOM     = $('.selected-target').children('.item-bom');
+    let elemBOM     = elemTarget.children('.item-bom');
     let exists      = itemExistsInBOM(elemItem, elemBOM);
     let qtyAdd      = $('#copy-qty').val();
     let makeBuy     = elemItem.find('.item-make-buy').val();
@@ -4467,6 +4520,8 @@ function updateBOMItems() {
     
 }
 function endProcessing() {
+
+    if(typeof mbomHistoryCheckpoint === 'function') mbomHistoryCheckpoint();
 
     $('#confirm-saving').removeClass('disabled').addClass('default');
     $('.in-work').removeClass('in-work');
