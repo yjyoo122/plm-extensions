@@ -3559,5 +3559,6 @@
     "workspace. This field should not be visible. Let this field be set automatically at item creation by script as shown below.": "ワークスペース。このフィールドは表示しないでください。以下に示すように、アイテム作成時にスクリプトでこのフィールドが自動的に設定されるようにします。",
     "workspace. Use the following formula for the new field:": "ワークスペースに追加します。新しいフィールドには次の数式を使用してください:",
     "workspaces detected, will be written": "件のワークスペースを検出しました。書き込まれます",
-    "yet. The portal will not use the Service BOM created by this editor.": "にはまだ対応していません。ポータルは、このエディタで作成されたサービスBOMを使用しません。"
+    "yet. The portal will not use the Service BOM created by this editor.": "にはまだ対応していません。ポータルは、このエディタで作成されたサービスBOMを使用しません。",
+    "Add Process": "プロセスを追加"
 }

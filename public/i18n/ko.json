@@ -3560,5 +3560,6 @@
     "workspace. This field should not be visible. Let this field be set automatically at item creation by script as shown below.": "작업공간. 이 필드는 표시되지 않아야 합니다. 아래와 같이 항목 작성 시 스크립트로 이 필드가 자동으로 설정되도록 하십시오.",
     "workspace. Use the following formula for the new field:": "작업공간에 추가합니다. 새 필드에는 다음 수식을 사용하십시오:",
     "workspaces detected, will be written": "개 작업공간이 검색되었습니다. 기록됩니다",
-    "yet. The portal will not use the Service BOM created by this editor.": "와 아직 호환되지 않습니다. 포털은 이 편집기에서 작성한 서비스 BOM을 사용하지 않습니다."
+    "yet. The portal will not use the Service BOM created by this editor.": "와 아직 호환되지 않습니다. 포털은 이 편집기에서 작성한 서비스 BOM을 사용하지 않습니다.",
+    "Add Process": "프로세스 추가"
 }

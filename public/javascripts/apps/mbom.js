@@ -812,7 +812,9 @@ function getMatchingEBOMPartProperties(mBOMPart) {
             return;
         }
         if(!isBlank(mBOMPart.ebomRoot)) {
-            if(mBOMPart.ebomRoot === eBOMPart.root) {
+            // A process keeps its own title even when it records the EBOM root item it belongs to -
+            // otherwise every process of the MBOM is displayed with the very same name, the EBOM's.
+            if((mBOMPart.ebomRoot === eBOMPart.root) && !isMBOMProcessRecord(mBOMPart)) {
                 mBOMPart.title = eBOMPart.title;
             }
         }
@@ -822,6 +824,13 @@ function getMatchingEBOMPartProperties(mBOMPart) {
     mBOMPart.matchesMBOM  = false;
     mBOMPart.ignoreInMBOM = false;
     mBOMPart.category     = '';
+
+}
+function isMBOMProcessRecord(mBOMPart) {
+
+    let fieldId = config.workspaceMBOM.fieldIDs.isProcess || 'IS_PROCESS';
+
+    return (isBlank(mBOMPart.details) ? false : (mBOMPart.details[fieldId] === 'true'));
 
 }
 function initEditor() {
@@ -2510,16 +2519,22 @@ function isMBOMProcess(node) {
 
 }
 function isMBOMLeaf(node) {
-    
-    if( node.level  === 0 ) return false;    
-    if( node.level  === 2 ) return true;
+
+    if( node.level  === 0 ) return false;
+
+    // A process stays a process at any depth, so processes can contain processes (an MBOM with more
+    // than one level of operations / sub-assemblies). Originally every node at level 2 was a leaf, so
+    // a process saved below another one came back as a leaf with its contents hidden. Everything else
+    // below the first level is still a leaf : the EBOM structure of a part is not expanded in the MBOM.
+    if( node.isProcess    ) return false;
+    if( node.level  >=  2 ) return true;
+
     if( node.endItem      ) return true;
     if( node.matchesMBOM  ) return true;
     if( !(isBlank(node.ebom)) ) return true;
-    if( node.isProcess    ) return false;
-    
+
     return !node.hasChildren;
-    
+
 }
 function addAction(label, elemParent) {
     
@@ -3203,23 +3218,41 @@ function updateMBOMNumbers() {
 
 // Input controls to add new items to MBOM
 function insertNewProcess() {
-    
+
     if($('#mbom-add-name').val() === '') return;
 
-    let elemNew = insertNewProcessNode($('#mbom-add-name').val(), $('#mbom-add-code').val(), $('#mbom-add-qty').val());
-    
-    selectProcess(elemNew);
-    
+    // The new process goes INTO the process selected as target, which gives the MBOM one more level.
+    // With the root or nothing selected it becomes a process directly below the root, as before.
+    // The target stays selected afterwards, so several processes can be added to it in a row - to go
+    // one level deeper, click the new process and insert again.
+    // (Previously the new node was passed to selectProcess, which - as the node was not marked
+    // 'selected' yet - cleared the selection instead of selecting anything.)
+    insertNewProcessNode($('#mbom-add-name').val(), $('#mbom-add-code').val(), $('#mbom-add-qty').val(), null, getNewProcessParent());
+
     $('#mbom-add-name').val('');
     $('#mbom-add-code').val('');
     $('#mbom-add-qty' ).val('');
-    $('#mbom-add-name').focus();    
-    
+    $('#mbom-add-name').focus();
+
 }
-function insertNewProcessNode(title, code, quantity, revision) {
+function getNewProcessParent() {
+
+    let elemRoot   = $('#mbom-tree').children('.item').first();
+    let elemTarget = $('#mbom').find('.selected-target').first();
+
+    if(elemTarget.length === 0)                         return elemRoot;
+    if(!elemTarget.hasClass('process'))                 return elemRoot;
+    if(elemTarget.children('.item-bom').length === 0)   return elemRoot;
+
+    return elemTarget;
+
+}
+function insertNewProcessNode(title, code, quantity, revision, elemParent) {
+
+    if(isBlank(elemParent) || (elemParent.length === 0)) elemParent = $('#mbom-tree').children('.item').first();
 
     let node = {
-        level       : 1,
+        level       : elemParent.parentsUntil('#mbom-tree', '.item').length + 1,
         bomType     : 'mbom',
         title       : title,
         hasChildren : true,
@@ -3232,14 +3265,15 @@ function insertNewProcessNode(title, code, quantity, revision) {
         quantity    : quantity || 1
     }
 
-    console.log(node);
-
     let elemNew = insertBOMPartListNode('mbom', null, node);
-    
-    let elemBOM = $('#mbom-tree').children().first().children('.item-bom').first();
+
+    let elemBOM = elemParent.children('.item-bom').first();
 
     if(disassembleMode) elemBOM.prepend(elemNew);
     else elemBOM.append(elemNew);
+
+    // a collapsed parent is opened, so the new process is visible where it went
+    if(elemBOM.hasClass('hidden')) elemParent.children('.item-head').find('.item-toggle.icon-expand').first().click();
 
     updateMBOMNumbers();
 

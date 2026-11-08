@@ -475,13 +475,15 @@ body.details-on.no-viewer #tabs         { left : calc(50% + (2 * var(--border-h)
     line-height    : 28px;
 }
 #mbom-add-text {
+    flex-shrink   : 0;      /* the label used to be squeezed to "Add P" while the title field kept its room */
     overflow      : hidden;
-    padding       : 0px 30px 0px 10px;
+    padding       : 0px 20px 0px 10px;
     text-overflow : ellipsis;
     white-space   : nowrap;
 }
 #mbom-add-name {
     flex-grow    : 1;
+    min-width    : 60px;
 }
 #mbom-add-code {
     text-align  : center;
