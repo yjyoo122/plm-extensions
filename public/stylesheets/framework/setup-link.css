@@ -20,6 +20,10 @@
     position : relative;
 }
 
+/* full screen toggle (Material Symbols fullscreen / fullscreen_exit, same font as fonts.css) */
+.icon-fullscreen::before      { content : '\e5d0'; }
+.icon-fullscreen-exit::before { content : '\e5d1'; }
+
 
 /*  ENTRY OF THE LANDING PAGE */
 /* ----------------------------------------------------------------------------- */

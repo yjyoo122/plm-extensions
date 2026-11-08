@@ -29,6 +29,8 @@
     const TOOLTIP      = 'Open the setup wizard to change tenant or connection settings';
     const HOME_LABEL   = 'Home';
     const HOME_TOOLTIP = 'Back to the overview of all applications';
+    const FULLSCREEN_ENTER = 'Full screen (Esc to leave)';
+    const FULLSCREEN_EXIT  = 'Leave full screen';
     const THEMES       = ['light', 'dark', 'black', 'fusion'];
 
     /*  Deliberately /landing and not / : exports.server.landingPage may point / at one
@@ -225,6 +227,58 @@
     }
 
 
+    /*  FULL SCREEN
+        Hides the browser's tabs and address bar - for demonstrations. The browser leaves
+        full screen on Esc by itself; the button follows that through fullscreenchange.  */
+
+    function insertFullscreenButton() {
+
+        let elemToolbar = $('#header-toolbar');
+
+        if(elemToolbar.length === 0)          return;
+        if($('#fullscreen-link').length > 0)  return;
+        if(!document.fullscreenEnabled)       return;
+
+        let elemControl = $('<div></div>')
+            .attr('id', 'fullscreen-link')
+            .addClass('setup-link-control');
+
+        let elemButton = $('<div></div>')
+            .addClass('button').addClass('icon').addClass('icon-fullscreen')
+            .click(guard('fullscreen', function() {
+                if(document.fullscreenElement) document.exitFullscreen();
+                else document.documentElement.requestFullscreen().catch(function() {});
+            }))
+            .appendTo(elemControl);
+
+        function update() {
+            let active = !!document.fullscreenElement;
+            elemButton
+                .toggleClass('icon-fullscreen', !active)
+                .toggleClass('icon-fullscreen-exit', active)
+                .attr('title', active ? FULLSCREEN_EXIT : FULLSCREEN_ENTER)
+                .attr('aria-label', active ? FULLSCREEN_EXIT : FULLSCREEN_ENTER);
+            translate(elemControl);
+        }
+
+        document.addEventListener('fullscreenchange', guard('fullscreen', update));
+
+        update();
+
+        // before home, so the order stays : full screen, home, settings, avatar
+        let elemAnchor = elemToolbar.children('#home-link');
+
+        if(elemAnchor.length === 0) elemAnchor = elemToolbar.children('#setup-link');
+        if(elemAnchor.length === 0) elemAnchor = elemToolbar.children('#header-avatar');
+
+        if(elemAnchor.length > 0) elemControl.insertBefore(elemAnchor);
+        else                      elemControl.appendTo(elemToolbar);
+
+        followToolbar(elemToolbar, elemControl);
+
+    }
+
+
     function insertHeaderButton() {
 
         let elemToolbar = $('#header-toolbar');
@@ -342,6 +396,8 @@
             The landing page is excluded : it IS the destination, a home button there would
             reload the page the user is already looking at.                                  */
         if(!isLandingPage()) insertHomeButton();
+
+        insertFullscreenButton();
 
         if($('#header-toolbar').length === 0) {
             if($('#setup-link-landing').length === 0) return;
