@@ -1112,3 +1112,34 @@ select.view-selector {
     }
 
 }
+
+/* -----------------------------------------------------------------------------------------
+   ITEM SELECTION - shown when the editor is opened without an item (see showItemChooser)
+   Laid out like the landing screen of the Product Data Explorer.
+   ----------------------------------------------------------------------------------------- */
+#mbom-chooser {
+    --width-chooser-list : 420px;
+    --padding-chooser-h  : 60px;
+}
+#mbom-chooser-intro {
+    left      : var(--padding-chooser-h);
+    right     : var(--padding-chooser-h);
+    top       : 32px;
+}
+.mbom-chooser-title {
+    font-size     : 22px;
+    font-weight   : 700;
+    margin-bottom : 8px;
+}
+.mbom-chooser-text {
+    color     : var(--color-gray-500);
+    max-width : 900px;
+}
+#mbom-chooser > #recents,
+#mbom-chooser > #search {
+    bottom : 40px;
+    top    : 130px;
+    width  : var(--width-chooser-list);
+}
+#mbom-chooser > #recents { left  : var(--padding-chooser-h); }
+#mbom-chooser > #search  { left  : calc(var(--padding-chooser-h) * 2 + var(--width-chooser-list)); }

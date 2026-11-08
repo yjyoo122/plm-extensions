@@ -72,6 +72,16 @@ let pendingActions, pendingRemovals;
 
 $(document).ready(function() {
 
+    /*  The editor works on the BOM of one item and is meant to be opened from that item
+        (/mbom?wsId=..&dmsId=..). Opened without one - from a bookmark, the address bar or
+        the Start Menu - every request below runs with an empty link, the first of them
+        asks the tenant for a page that does not exist, and the user is left with a bare
+        "Error at startup". Offer a way to pick the item instead.                         */
+    if(isBlank(urlParameters.link)) {
+        showItemChooser();
+        return;
+    }
+
     for(let option of options) {
         let param = option.split(':');
         if(param[0].toLowerCase() === 'site') {
@@ -4473,5 +4483,69 @@ function endProcessing() {
 
     $.post('/plm/edit', paramsEBOM, function(response) { printResponseErrorMessagesToConsole(response); });
     $.post('/plm/edit', paramsMBOM, function(response) { printResponseErrorMessagesToConsole(response); });
+
+}
+
+// Item selection when the editor has been opened without an item
+// ------------------------------------------------------------------------------------------
+// Same pattern as the landing screen of the Product Data Explorer : recently viewed items next
+// to a search, both restricted to the EBOM workspace. Choosing an item reopens this page with
+// wsId and dmsId set, every other parameter (theme, language, options such as site:A) is kept.
+function showItemChooser() {
+
+    let wsId = config.workspaceEBOM.workspaceId || common.workspaceIds.items;
+
+    getFeatureSettings('mbom', [], function() {
+
+        $('#main').hide();
+
+        // Kept visible but inert : without an item there is nothing to save or reset. They are
+        // disabled rather than hidden because the home and settings buttons of the header follow
+        // the visibility of these siblings and would otherwise disappear with them.
+        $('#header-toolbar').children('.button').addClass('disabled');
+
+        let elemScreen = $('<div></div>').attr('id', 'mbom-chooser').addClass('screen').appendTo($('body'));
+        let elemIntro  = $('<div></div>').attr('id', 'mbom-chooser-intro').appendTo(elemScreen);
+
+        $('<div></div>').appendTo(elemIntro).addClass('mbom-chooser-title').text('Choose the item to work on');
+        $('<div></div>').appendTo(elemIntro).addClass('mbom-chooser-text').text('The Manufacturing BOM Editor always works on the bill of materials of one engineering item. Pick it below - a recently viewed item, or find it by search - and the editor opens on it.');
+
+        $('<div></div>').appendTo(elemScreen).attr('id', 'recents').addClass('surface-level-2');
+        $('<div></div>').appendTo(elemScreen).attr('id', 'search' ).addClass('surface-level-2');
+
+        insertRecentItems({
+            headerLabel  : 'Recently Viewed',
+            reload       : true,
+            contentSize  : 'xs',
+            workspacesIn : [ wsId ],
+            onClickItem  : function(elemClicked) { openChosenItem(elemClicked); }
+        });
+
+        insertSearch({
+            autoClick    : false,
+            contentSize  : 'xs',
+            images       : true,
+            limit        : 50,
+            workspaceIds : [ wsId ],
+            onClickItem  : function(elemClicked) { openChosenItem(elemClicked); }
+        });
+
+    });
+
+}
+function openChosenItem(elemClicked) {
+
+    let link = String(elemClicked.attr('data-link') || '');
+    let path = link.split('/');
+
+    // /api/v3/workspaces/<wsId>/items/<dmsId>
+    if(path.length < 7) return;
+
+    let url = new URL(document.location.href);
+
+    url.searchParams.set('wsId' , path[4]);
+    url.searchParams.set('dmsId', path[6]);
+
+    document.location.href = url.toString();
 
 }
