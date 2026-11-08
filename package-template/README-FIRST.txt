@@ -8,4 +8,7 @@ FUSION MANAGE UX  -  READ THIS FIRST
 6. The app restarts by itself and you are ready to work.
 7. To stop the app, close the black window.
 8. After that first start, the icon "Fusion Manage UX" works too, and you can drag it to your desktop.
-9. Nothing is installed on your computer and no administrator rights are needed.
+9. Nothing is installed on your computer and no administrator rights are needed. Start.cmd only records,
+   for your own Windows user, where the Start / Stop helper of the browser extension is.
+10. Optional: the browser extension in the "chrome" folder adds the apps to the Fusion Manage menu and
+   can start and stop the app from Chrome. See docs\CHROME-EXTENSION.md.

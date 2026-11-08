@@ -10,30 +10,70 @@ let serverUrl = 'http://localhost:8080';
 
 
 
-let commands    = [];
-let buttons     = [];
-let workspaces  = {};
-let maxLevel    = 0;
-let customStyle = false;
+let commands     = [];
+let buttons      = [];
+let workspaces   = {};
+let maxLevel     = 0;
+let customStyle  = false;
+
+// Shown when the UX server has never been reached from this browser yet - one entry to the apps,
+// which is also what starts the server when it is not running
+const defaultCommands = [{ id : 'landing', url : '/landing', label : 'PLM UX Extensions', icon : 'zmdi-apps', order : 100 }];
 
 
-// Retrieve command and button settings from UX Server based on settings.js (see exports.chrome)
-chrome.runtime.sendMessage({ action: 'fetchData', url : serverUrl + '/services/chrome' }, (response) => {
-    if (response.success) {
-        commands    = response.data.commands;
-        buttons     = response.data.buttons;
-        workspaces  = response.data.workspaces;
-        customStyle = response.data.customStyle;
-    } else {
-        console.log('Error getting extensions settings from ' + serverUrl + '/services/chrome');
-        console.log(response.error);
-    }
-});
+// The server URL saved in the popup is read FIRST, so the settings are requested from the right server
 chrome.storage.sync.get(['serverUrl'], (result) => {
 
-    if(result.serverUrl) serverUrl = result.serverUrl;
+    if(result && result.serverUrl) serverUrl = String(result.serverUrl).replace(/\/+$/, '');
+
+    loadConfiguration();
 
 });
+
+// Retrieve command and button settings from UX Server based on settings.js (see exports.chrome).
+// They are remembered, so that while the server is not running the menu entries and buttons are still
+// shown - clicking one of them then starts the server first (see openCommand in background.js).
+function loadConfiguration(callback) {
+
+    chrome.runtime.sendMessage({ action: 'fetchData', url : serverUrl + '/services/chrome' }, (response) => {
+        if (response && response.success) {
+            applyConfiguration(response.data);
+            chrome.storage.local.set({ plmxChromeConfig : { serverUrl : serverUrl, data : response.data } });
+            if(callback) callback();
+        } else {
+            console.log('PLM UX Extensions server not reached at ' + serverUrl + ' - using the settings it sent last time');
+            chrome.storage.local.get(['plmxChromeConfig'], (cached) => {
+                let entry = cached ? cached.plmxChromeConfig : null;
+                if(entry && (entry.serverUrl === serverUrl) && entry.data) applyConfiguration(entry.data);
+                else applyConfiguration({ commands : defaultCommands, buttons : [], workspaces : {}, customStyle : false });
+                if(callback) callback();
+            });
+        }
+    });
+
+}
+
+function applyConfiguration(data) {
+
+    commands    = data.commands    || [];
+    buttons     = data.buttons     || [];
+    workspaces  = data.workspaces  || {};
+    customStyle = data.customStyle || false;
+
+}
+
+// Opens a page of the UX server in a new tab, through the background worker so that a server which is
+// not running gets started first
+function openServerPage(url) {
+
+    try {
+        chrome.runtime.sendMessage({ action : 'openCommand', url : url });
+    } catch(error) {
+        // the extension was reloaded since this page was opened, this script can no longer reach it
+        window.open(url);
+    }
+
+}
 
 
 
@@ -84,6 +124,11 @@ function insertExtensionsCommand(elemMenu, command) {
         // Fusion Manage page that was on screen - which matters in the middle of a demo.
         elemButton.setAttribute('target', '_blank');
         elemButton.setAttribute('rel', 'noopener');
+
+        elemButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            openServerPage(elemButton.getAttribute('href'));
+        });
 
         elemButton.style.setProperty('order', command.order);
 
@@ -178,20 +223,8 @@ observer.observe(document, { childList: true, subtree: true });
 
 function onItemHeaderAdded() {
 
-    if(buttons.length === 0) {
-
-        chrome.runtime.sendMessage({ action: 'fetchData', url : serverUrl + '/services/chrome' }, (response) => {
-            if (response.success) {
-                buttons    = response.data.buttons;
-                workspaces = response.data.workspaces;
-                insertItemHeaderButtons();
-            } else {
-                console.log('Error getting extensions settings from ' + serverUrl + '/services/chrome');
-                console.log(response.error);
-            }
-        });
-
-    } else insertItemHeaderButtons();
+    if(buttons.length === 0) loadConfiguration(insertItemHeaderButtons);
+    else insertItemHeaderButtons();
 
 }
 
@@ -258,7 +291,7 @@ function insertItemHeaderButtons() {
                         let dmsId      = parameters.pop();
                         let url        = serverUrl + button.url + 'wsId=' + wsId + '&dmsid=' + dmsId;
 
-                        window.open(url);
+                        openServerPage(url);
 
                     }
 

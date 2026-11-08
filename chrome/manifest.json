@@ -1,8 +1,11 @@
 {
     "manifest_version": 3,
     "name": "PLM UX Extensions",
-    "version": "1.0",
-    "description": "Adds PLM UX Extensions commands to the Fusion Manage standard user interface",
+    "version": "1.1",
+    "description": "Adds PLM UX Extensions commands to the Fusion Manage standard user interface, and starts / stops the local UX server",
+    // Fixes the extension ID (hoihaoempgngpcglmnamdadlbplnkopl) wherever the folder is loaded from. The start / stop
+    // helper in chrome-host/ only answers this ID. Public key only - there is no private key to keep secret.
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnqFCUK4JOnK1hLdCTaMcfVLDJ/5Ezm4X89DnDTRO/KGVHnWe9+1rDXUXb+zLtPCILUChHrEJA+1hwVBciE7X/g7rpBHeCG0fnU5c9SC5HXjoK5riO8C+lECMW8dza26BBieLK+zThm/QkA8LFniJ+m90OpGcM/EQfjn9BR2Ex6nDH3LMOG/oYF0lIDx5s/8WhEtBkkvsDp30ryc4qAwuODbiP4PFnEKiYCpZs1PSJ31KH5HSyRQvjRacq/wXu8cSL7Unr8ULof2uP36fs9TBXLJT5CD0j22lo4XZrhTQXgPGD7DYuC6Xd1wPQWnlysYqzyTH9vuXKLWjL556NAgbPwIDAQAB",
     "icons" : {
          "16" : "icon-16.png",
          "48" : "icon-48.png",
@@ -11,7 +14,8 @@
     "permissions": [
         "activeTab",
         "storage",
-        "background"
+        "background",
+        "nativeMessaging"
     ],
     "action": {
         "default_popup" : "options.html",

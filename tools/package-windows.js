@@ -60,6 +60,7 @@ const COPY_ITEMS = [
     { name: 'settings',       required: true  },
     { name: 'environments',   required: true  },
     { name: 'chrome',         required: false },
+    { name: 'chrome-host',    required: false },
     { name: 'docs',           required: false }
 ];
 

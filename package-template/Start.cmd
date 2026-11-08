@@ -27,6 +27,12 @@ if /i "%~1"=="--open-browser" (
 )
 
 
+rem  Started by the browser extension (chrome-host\host.js) : the extension opens the page itself once
+rem  the app answers, so no second tab is opened from here.
+set "PLMX_OPEN_BROWSER=1"
+if /i "%~1"=="--no-browser" set "PLMX_OPEN_BROWSER="
+
+
 rem  Switched to UTF-8 so Japanese and Korean folder and profile names print correctly. Its input is
 rem  taken from nul because chcp is an external program : inheriting this window's input lets it consume
 rem  what the user has already typed ahead, which would eat the answer to the tenant question below.
@@ -76,6 +82,17 @@ rem  command line, so an apostrophe, a dollar sign or a backtick in the folder n
 rem  The whole call is best effort : if it fails the app still starts, only the icon is not refreshed.
 
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$d=$env:PLMX_HOME; $t=$d+'Start.cmd'; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($d+'Fusion Manage UX.lnk'); if($s.TargetPath -ne $t) { $s.TargetPath=$t; $s.WorkingDirectory=$d; $s.IconLocation=$d+'public\favicon.ico,0'; $s.Description='Fusion Manage UX - starts the local server and opens the apps'; $s.WindowStyle=1; $s.Save() }" >nul 2>&1
+
+
+rem ---------------------------------------------------------------------------------------------------
+rem  START / STOP BUTTON OF THE BROWSER EXTENSION
+rem ---------------------------------------------------------------------------------------------------
+rem  The browser extension can start and stop this app, but only through a small helper program that has
+rem  been registered with Chrome and Edge beforehand (chrome-host\register.js : two entries under
+rem  HKEY_CURRENT_USER, no administrator rights). Registered on every launch, so it follows the folder when
+rem  it is moved. Best effort like the shortcut above : if it fails, only the button in the browser does.
+
+if exist "!PLMX_HOME!chrome-host\register.js" "!PLMX_NODE!" "!PLMX_HOME!chrome-host\register.js" >nul 2>&1
 
 
 rem ---------------------------------------------------------------------------------------------------
@@ -226,7 +243,8 @@ set /a PLMX_RESTARTS=0
 echo.
 echo   Fusion Manage UX is starting up.
 if defined PLMX_PROFILE echo   Using the tenant profile !PLMX_PROFILE!.
-echo   Your browser will open at !PLMX_URL! in a moment.
+if defined PLMX_OPEN_BROWSER echo   Your browser will open at !PLMX_URL! in a moment.
+if not defined PLMX_OPEN_BROWSER echo   Started from the browser extension, the app will be at !PLMX_URL!
 echo.
 echo   Keep this window open while you work. Closing it stops the app.
 echo.
@@ -239,7 +257,7 @@ rem  cmd /c, which strips the first and the last quote of the command line whene
 rem  argument is quoted. Quoting the URL as well would mangle the path and the launch would fail with
 rem  "is not recognized as an internal or external command". A URL never contains a space, so leaving
 rem  it bare is safe.
-start /b "" "!PLMX_SELF!" --open-browser !PLMX_URL!
+if defined PLMX_OPEN_BROWSER start /b "" "!PLMX_SELF!" --open-browser !PLMX_URL!
 
 
 :plmx_launch

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>PLM UX Extensions</title>
+    <style>
+      html, body { height : 100%; margin : 0; }
+      body {
+        align-items     : center;
+        background      : #2a2a2a;
+        color           : #eee;
+        display         : flex;
+        font-family     : Arial, "Yu Gothic UI", "Meiryo", "Malgun Gothic", sans-serif;
+        justify-content : center;
+      }
+      #panel     { max-width : 520px; padding : 24px; text-align : center; }
+      h1         { font-size : 20px; font-weight : normal; margin : 22px 0 10px 0; }
+      p          { color : #bbb; font-size : 14px; line-height : 21px; margin : 0; }
+      #message   { color : #ff9b7d; margin-top : 18px; }
+      .spinner {
+        animation     : spin 0.9s linear infinite;
+        border        : 4px solid #555;
+        border-radius : 50%;
+        border-top    : 4px solid #0696d7;
+        height        : 36px;
+        margin        : 0 auto;
+        width         : 36px;
+      }
+      .failed .spinner { animation : none; border-top-color : #555; }
+      .hidden    { display : none; }
+      @keyframes spin { to { transform : rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="panel">
+      <div class="spinner"></div>
+      <h1 id="title" data-text="startingTitle">Starting PLM UX Extensions…</h1>
+      <p id="text" data-text="startingText"></p>
+      <p id="message" class="hidden"></p>
+    </div>
+    <script src="common.js"></script>
+    <script src="starting.js"></script>
+  </body>
+</html>

@@ -938,6 +938,32 @@ router.post('/activate', function(req, res, next) {
 
 
 /* ------------------------------------------------------------------------------
+    STOPPING THE APP
+
+    Used by the start / stop helper of the browser extension (chrome-host/host.js),
+    so the app can be turned off from the browser instead of by finding its black
+    window. Ends with exit code 0, which Start.cmd treats as a normal end : the
+    window closes as well and nothing is restarted.
+   ------------------------------------------------------------------------------ */
+router.post('/shutdown', function(req, res, next) {
+
+    if(!isSameOriginRequest(req)) {
+        return res.status(403).json({ ok : false, message : 'This request did not come from this computer.' });
+    }
+
+    res.json({ ok : true, supervised : isSupervised() });
+
+    setTimeout(function() {
+        console.log();
+        console.log('  Stopped from the browser extension.');
+        console.log();
+        process.exit(0);
+    }, 500);
+
+});
+
+
+/* ------------------------------------------------------------------------------
     DELETING A TENANT PROFILE
 
     Creating a profile was possible from the first version, correcting a mistake in

@@ -19,3 +19,5 @@ package-lock.json
 run.sh
 environment.backup-*.js
 /dist
+/chrome-host/com.plmx.launcher.json
+/chrome-host/*.lnk

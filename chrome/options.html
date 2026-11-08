@@ -1,63 +1,121 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>PLM UX Extensions Options</title>
+    <meta charset="utf-8">
+    <title>PLM UX Extensions</title>
     <style>
       body {
-        background : #f1f1f1;
-        width       : 550px;
-        font-family : Arial, sans-serif;
+        background  : #f1f1f1;
+        color       : #222;
+        width       : 340px;
+        margin      : 0;
+        font-family : Arial, "Yu Gothic UI", "Meiryo", "Malgun Gothic", sans-serif;
+        font-size   : 13px;
         padding     : 16px;
       }
+      h2 {
+        font-size : 16px;
+        margin    : 0 0 12px 0;
+      }
+      #status {
+        align-items   : center;
+        background    : white;
+        border-radius : 4px;
+        display       : flex;
+        gap           : 10px;
+        padding       : 10px 12px;
+      }
+      #status-dot {
+        background    : #999;
+        border-radius : 50%;
+        flex-shrink   : 0;
+        height        : 12px;
+        width         : 12px;
+      }
+      #status.running #status-dot { background : #2bc275; }
+      #status.stopped #status-dot { background : #c8c8c8; border : 1px solid #999; }
+      #status.busy    #status-dot { background : #f4a623; animation : pulse 1s infinite alternate; }
+      @keyframes pulse { from { opacity : 1; } to { opacity : 0.3; } }
+      #status-text   { font-weight : bold; }
+      #status-tenant { color : #666; font-size : 12px; margin-top : 2px; }
+      #actions {
+        display    : flex;
+        gap        : 6px;
+        margin-top : 10px;
+      }
       button {
-        border      : none;
+        border        : none;
         border-radius : 3px;
-        background  : #0696d7;
-        color       : white;
-        height      : 38px;
-        line-height : 38px;
-        padding     : 0px;
-        text-align  : center;
-        width       : 100%;
+        background    : #0696d7;
+        color         : white;
+        cursor        : pointer;
+        flex          : 1;
+        font-size     : 13px;
+        height        : 34px;
+        padding       : 0 10px;
       }
-      #options {
-        display        : flex;
-        flex-direction : column;
-        gap            : 4px;
-        margin-top     : 18px;
-        margin-bottom  : 24px;
+      button:hover            { filter : brightness(1.1); }
+      button[disabled]        { cursor : default; filter : none; opacity : 0.4; }
+      button.secondary        { background : white; border : 1px solid #bbb; color : #222; }
+      button.danger           { background : white; border : 1px solid #d74e26; color : #d74e26; }
+      .hidden                 { display : none !important; }
+      #hint, #message         { color : #555; font-size : 12px; line-height : 17px; margin : 8px 0 0 0; }
+      #message                { color : #b4361c; }
+      details                 { border-top : 1px solid #ddd; margin-top : 14px; padding-top : 10px; }
+      summary                 { color : #555; cursor : pointer; }
+      .option                 { display : flex; flex-direction : column; gap : 4px; margin-top : 10px; }
+      input, select {
+        background    : white;
+        border        : 1px solid #bbb;
+        border-radius : 3px;
+        font-size     : 13px;
+        height        : 30px;
+        padding       : 0 8px;
       }
-      .option {
-        display : flex;
-        gap     : 10px;
-      }
-      .option-label {
-        line-height : 30px;
-        height      : 30px;
-        width       : 100px;
-      }
-      input {
-        background-color : '#aaa' !important;
-        background       : '#cccccc' !important;
-        border           : none;
-        border-bottom    : 1px solid #bbbbbb;
-        padding          : 4px 16px;
-        line-height      : 20px;
-        height           : 20px;
-        width            : 404px;
-      }
+      #save    { margin-top : 10px; width : 100%; }
+      #saved   { color : #2b8a57; font-size : 12px; margin : 6px 0 0 0; }
     </style>
   </head>
   <body>
-    <h2>PLM UX Extensions Options</h2>
-    <p>Changes will only get applied after a refresh of the Fusion Manage page</p>
-    <div id="options">
-        <div class="option">
-          <div class="option-label">UX Server URL</div>
-          <input type="text" id="serverUrl" placeholder="Enter UX server URL" value="http://localhost:8080">
-        </div>
+    <h2 data-text="title">PLM UX Extensions</h2>
+
+    <div id="status" class="busy">
+      <div id="status-dot"></div>
+      <div>
+        <div id="status-text" data-text="checking">Checking…</div>
+        <div id="status-tenant" class="hidden"></div>
+      </div>
     </div>
-    <button id="saveButton">Save</button>
+
+    <div id="actions">
+      <button id="start" class="hidden" data-text="start">Start</button>
+      <button id="open"  class="hidden" data-text="open">Open apps</button>
+      <button id="stop"  class="hidden danger" data-text="stop">Stop</button>
+    </div>
+
+    <p id="hint" class="hidden"></p>
+    <p id="message" class="hidden"></p>
+
+    <details id="settings">
+      <summary data-text="settings">Settings</summary>
+      <div class="option">
+        <label for="serverUrl" data-text="serverUrl">UX server URL</label>
+        <input type="text" id="serverUrl" placeholder="http://localhost:8080" value="http://localhost:8080">
+      </div>
+      <div class="option">
+        <label for="language" data-text="language">Language</label>
+        <select id="language">
+          <option value="" data-text="languageAuto">Same as browser</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+        </select>
+      </div>
+      <button id="save" class="secondary" data-text="save">Save</button>
+      <p id="saved" class="hidden" data-text="saved"></p>
+    </details>
+
+    <script src="common.js"></script>
     <script src="options.js"></script>
   </body>
 </html>
