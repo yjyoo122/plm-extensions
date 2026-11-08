@@ -79,6 +79,12 @@ function insertExtensionsCommand(elemMenu, command) {
         elemButton.id = 'plm-extensions-' + command.id;
         elemButton.classList.add('plm-extensions-command');
         elemButton.setAttribute('href', serverUrl + command.url);
+
+        // A new tab, so that opening a utility from the menu never navigates away from the
+        // Fusion Manage page that was on screen - which matters in the middle of a demo.
+        elemButton.setAttribute('target', '_blank');
+        elemButton.setAttribute('rel', 'noopener');
+
         elemButton.style.setProperty('order', command.order);
 
         if(customStyle) {

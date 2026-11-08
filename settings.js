@@ -1728,6 +1728,14 @@ exports.server = {
 // Configure the commands to be added to the Fusion Manage main menu and the buttons to be added to matching item's header
 exports.chrome = {
     commands : [{
+        // One discreet way back into this server from the Fusion Manage hamburger menu : opens the
+        // overview of all applications in a new tab, so the Fusion Manage page stays where it was.
+        id    : 'landing',
+        url   : '/landing',
+        label : 'PLM UX Extensions',
+        icon  : 'zmdi-apps',
+        order : 100
+    },{
         id    : 'users',
         url   : '/users',
         label : 'User Settings Manager',
