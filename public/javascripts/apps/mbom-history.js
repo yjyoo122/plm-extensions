@@ -173,7 +173,8 @@ let mbomHistoryStart, mbomHistoryPause, mbomHistoryCheckpoint;
 
     function refreshDerivedState() {
 
-        let refreshers = [ 'updateMBOMNumbers', 'setTotalQuantities', 'setStatusBar', 'setStatusBarFilter', 'updateViewer' ];
+        // restoreAssembly : in disassemble mode, components no longer in the MBOM reappear in the model
+        let refreshers = [ 'updateMBOMNumbers', 'setTotalQuantities', 'setStatusBar', 'setStatusBarFilter', 'updateViewer', 'restoreAssembly' ];
 
         for(let name of refreshers) {
             if(typeof window[name] !== 'function') continue;
@@ -295,7 +296,9 @@ let mbomHistoryStart, mbomHistoryPause, mbomHistoryCheckpoint;
             // typing into a quantity field changes a property, not the DOM
             getTree().on('input.mbomHistory change.mbomHistory', schedule);
 
-            $('#undo').click(function() { if(!$(this).hasClass('disabled')) undo(); });
+            // a change made in the last half second is not recorded yet, so the button may still look
+            // disabled - undo() records it first (flushPending) and then steps back over it
+            $('#undo').click(function() { if(!$(this).hasClass('disabled') || (timer !== null)) undo(); });
             $('#redo').click(function() { if(!$(this).hasClass('disabled')) redo(); });
 
             $(document).on('keydown.mbomHistory', function(e) {

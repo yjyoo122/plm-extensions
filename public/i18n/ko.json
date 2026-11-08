@@ -3561,5 +3561,21 @@
     "workspace. Use the following formula for the new field:": "작업공간에 추가합니다. 새 필드에는 다음 수식을 사용하십시오:",
     "workspaces detected, will be written": "개 작업공간이 검색되었습니다. 기록됩니다",
     "yet. The portal will not use the Service BOM created by this editor.": "와 아직 호환되지 않습니다. 포털은 이 편집기에서 작성한 서비스 BOM을 사용하지 않습니다.",
-    "Add Process": "프로세스 추가"
+    "Add Process": "프로세스 추가",
+    "Add this assembly with all its subcomponents to the MBOM, keeping its levels (Shift+click : add the subcomponents only, without the assembly level)": "이 어셈블리를 모든 하위 구성요소와 함께 계층을 유지한 채 MBOM에 추가(Shift+클릭: 어셈블리 계층 없이 하위 구성요소만 추가)",
+    "Drag to change the width of the MBOM (double-click : default layout)": "드래그하여 MBOM 너비 변경(더블클릭: 기본 레이아웃으로 복원)",
+    "Drag to change the width of the viewer and the EBOM (double-click : default layout)": "드래그하여 뷰어와 EBOM 너비 변경(더블클릭: 기본 레이아웃으로 복원)",
+    "Create MBOM": "MBOM 생성",
+    "Update MBOM": "MBOM 업데이트",
+    "This MBOM has no structure in Fusion Manage yet. Writes the processes and components shown here as its first version.": "이 MBOM에는 아직 Fusion Manage에 저장된 구성이 없습니다. 여기 표시된 프로세스와 구성요소를 첫 번째 구성으로 저장합니다.",
+    "Writes the changes made here to the existing MBOM in Fusion Manage.": "여기에서 변경한 내용을 Fusion Manage의 기존 MBOM에 저장합니다.",
+    "Component not found in the EBOM": "EBOM에서 구성요소를 찾을 수 없음",
+    "The 3D model calls the selected component": "3D 모델에서 선택한 구성요소의 이름은",
+    ". Neither it nor any assembly above it matches the part number of an EBOM row, so it was not added to the MBOM and stays visible.": "입니다. 이 번호와 상위 어셈블리의 번호 모두 EBOM 행의 부품 번호와 일치하지 않아 MBOM에 추가되지 않았으며 모델에도 그대로 표시됩니다.",
+    "Full screen (Esc to leave)": "전체 화면(Esc로 종료)",
+    "Leave full screen": "전체 화면 종료",
+    "Show parts already in MBOM": "MBOM에 추가된 부품 표시",
+    "Off : parts already moved to the MBOM disappear from the model. On : they stay visible, tinted green.": "끄기: MBOM으로 옮긴 부품이 모델에서 사라집니다. 켜기: 녹색으로 표시된 채 남아 있습니다.",
+    "Reverse section view": "섹션 보기 반전",
+    "Off : shows only the parts of the selected section and hides the rest. On : hides the selected section and shows the rest, so you can click more parts into it.": "끄기: 선택한 섹션의 부품만 표시하고 나머지는 숨깁니다. 켜기: 선택한 섹션을 숨기고 나머지를 표시하므로 부품을 클릭하여 섹션에 추가할 수 있습니다."
 }

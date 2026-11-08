@@ -3560,5 +3560,21 @@
     "workspace. Use the following formula for the new field:": "ワークスペースに追加します。新しいフィールドには次の数式を使用してください:",
     "workspaces detected, will be written": "件のワークスペースを検出しました。書き込まれます",
     "yet. The portal will not use the Service BOM created by this editor.": "にはまだ対応していません。ポータルは、このエディタで作成されたサービスBOMを使用しません。",
-    "Add Process": "プロセスを追加"
+    "Add Process": "プロセスを追加",
+    "Add this assembly with all its subcomponents to the MBOM, keeping its levels (Shift+click : add the subcomponents only, without the assembly level)": "このアセンブリをすべてのサブコンポーネントとともに、階層を保ったままMBOMに追加（Shift+クリック：アセンブリの階層なしでサブコンポーネントのみを追加）",
+    "Drag to change the width of the MBOM (double-click : default layout)": "ドラッグしてMBOMの幅を変更（ダブルクリック：既定のレイアウトに戻す）",
+    "Drag to change the width of the viewer and the EBOM (double-click : default layout)": "ドラッグしてビューアとEBOMの幅を変更（ダブルクリック：既定のレイアウトに戻す）",
+    "Create MBOM": "MBOMを作成",
+    "Update MBOM": "MBOMを更新",
+    "This MBOM has no structure in Fusion Manage yet. Writes the processes and components shown here as its first version.": "このMBOMにはまだFusion Manage上の構成がありません。ここに表示されているプロセスとコンポーネントを最初の構成として書き込みます。",
+    "Writes the changes made here to the existing MBOM in Fusion Manage.": "ここで行った変更を、Fusion Manage上の既存のMBOMに書き込みます。",
+    "Component not found in the EBOM": "EBOMにコンポーネントが見つかりません",
+    "The 3D model calls the selected component": "3Dモデルでは、選択したコンポーネントの名前は",
+    ". Neither it nor any assembly above it matches the part number of an EBOM row, so it was not added to the MBOM and stays visible.": "です。この番号も上位のアセンブリの番号も、EBOMのどの行の部品番号とも一致しないため、MBOMには追加されず、モデルにも表示されたままです。",
+    "Full screen (Esc to leave)": "フルスクリーン（Escで終了）",
+    "Leave full screen": "フルスクリーンを終了",
+    "Show parts already in MBOM": "MBOMに追加済みの部品を表示",
+    "Off : parts already moved to the MBOM disappear from the model. On : they stay visible, tinted green.": "オフ：MBOMに移した部品はモデルから消えます。オン：緑色で表示されたまま残ります。",
+    "Reverse section view": "セクション表示を反転",
+    "Off : shows only the parts of the selected section and hides the rest. On : hides the selected section and shows the rest, so you can click more parts into it.": "オフ：選択したセクションの部品だけを表示し、他は非表示にします。オン：選択したセクションを非表示にして他を表示するので、部品をクリックしてセクションに追加できます。"
 }

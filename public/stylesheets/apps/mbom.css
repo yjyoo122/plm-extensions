@@ -117,6 +117,45 @@ body.details-on #details { right : 0px; }
 body.details-on.no-viewer #mbom         { width : calc(50% - (2 * var(--padding-panel)) - 2px - (var(--width-details) / 2)); }
 body.details-on.no-viewer #tabs         { left : calc(50% + (2 * var(--border-h) - (2 * var(--padding-panel)) - 2px - (var(--width-details) / 2))) }
 
+/* Panel widths dragged by the user (mbom-layout.js). With the viewer off the layout above splits 50 / 50;
+   once the MBOM width has been dragged in that layout it follows --width-mbom like all other layouts. */
+body.custom-split.mode-ebom.no-viewer #mbom  { width : var(--width-mbom); }
+body.custom-split.mode-ebom.no-viewer #tabs  { left : 0px; right : calc(var(--width-mbom) + (2 * var(--border-h))); width : auto; }
+body.custom-split.details-on.no-viewer #mbom { width : var(--width-mbom); }
+body.custom-split.details-on.no-viewer #tabs { left : 0px; right : calc(var(--width-mbom) + (2 * var(--border-h)) + var(--width-details)); width : auto; }
+
+/* Disassemble : switch between hiding and showing (tinted) the components already in the MBOM */
+#disassemble-options {
+    display  : none;
+    gap      : 8px;
+    position : absolute;
+    right    : 10px;
+    top      : 52px;
+    z-index  : 5;
+}
+body.mode-disassemble #disassemble-options { display : flex; }
+
+.panel-splitter {
+    cursor   : col-resize;
+    position : absolute;
+    z-index  : 20;
+}
+.panel-splitter::after {
+    background  : transparent;
+    bottom      : 0px;
+    content     : '';
+    left        : 50%;
+    margin-left : -2px;
+    position    : absolute;
+    top         : 0px;
+    transition  : background 0.15s ease;
+    width       : 4px;
+}
+.panel-splitter:hover::after,
+.panel-splitter.active::after { background : var(--color-selected-background, #0696d7); }
+body.resizing-panels,
+body.resizing-panels * { cursor : col-resize !important; user-select : none; }
+
 
 
 /* ITEMS */

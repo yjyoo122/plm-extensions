@@ -61,6 +61,9 @@ let links              = {};
 let basePartNumber     = '';
 let viewerStatusColors = false;
 let disassembleMode    = false;
+let disassembleShowAdded = false;   // disassemble : keep the components already in the MBOM visible, tinted
+let disassembleTinted  = false;
+let disassembleReverse = false;     // disassemble : hide the selected section and show the rest, instead of the opposite
 let elemBOMDropped     = null;
 let siteSuffix         = '';
 let siteLabel          = '';
@@ -206,8 +209,10 @@ function setUIEvents() {
         $('body').addClass('mode-disassemble').removeClass('mode-ebom').removeClass('mode-add').removeClass('mode-operations');
         viewerResize();
         viewerSetFeature({ id : 'viewer' }, 'ghosting', false);
-        restoreAssembly();
+        // the mode is set first : restoreAssembly does nothing outside disassemble mode, so in the
+        // reverse order the components already in the MBOM were never taken out of the model
         disassembleMode = true;
+        restoreAssembly();
         $(this).addClass('selected');
         $(this).siblings().removeClass('selected');
     });
@@ -216,20 +221,20 @@ function setUIEvents() {
         viewerResize();
         viewerSetFeature({ id : 'viewer' }, 'ghosting', true);
         viewerResetSelection(false);
-        disassembleMode = false;
+        leaveDisassembleMode();
         $(this).addClass('selected');
         $(this).siblings().removeClass('selected');
     });
     $('#mode-add').click(function() { 
         $('body').removeClass('mode-disassemble').removeClass('mode-ebom').addClass('mode-add').removeClass('mode-operations');
-        disassembleMode = false;
+        leaveDisassembleMode();
         $(this).addClass('selected');
         $(this).siblings().removeClass('selected');
         viewerResize();
     });
     $('#mode-operations').click(function() { 
         $('body').removeClass('mode-disassemble').removeClass('mode-ebom').removeClass('mode-add').addClass('mode-operations');
-        disassembleMode = false;
+        leaveDisassembleMode();
         $(this).addClass('selected');
         $(this).siblings().removeClass('selected');
         viewerResize();
@@ -245,6 +250,16 @@ function setUIEvents() {
         $('.item.selected').removeClass('selected');
         $('.item').show();
         viewerResetSelection(true);
+    });
+    $('#toggle-section-reverse').click(function() {
+        disassembleReverse = !isDisassembleSectionReversed();
+        $('.section-adding').removeClass('section-adding');
+        restoreAssembly();
+    });
+    $('#toggle-show-added').click(function() {
+        $(this).toggleClass('toggle-on').toggleClass('toggle-off');
+        disassembleShowAdded = $(this).hasClass('toggle-on');
+        restoreAssembly();
     });
     $('#toggle-viewer').click(function() {
         $(this).toggleClass('toggle-on').toggleClass('toggle-off');
@@ -677,9 +692,9 @@ function processItemData(itemDetails) {
 function createMBOMRoot(ebomItemDetails, callback) {
 
     if(links.mbom !== '') {
-        
+
         callback();
-        
+
     } else {
 
         createMBOMForEBOM(ebomItemDetails, basePartNumber, function(linkMBOM) {
@@ -862,6 +877,8 @@ function initEditor() {
     $('.bar').show();
 
     if(typeof mbomHistoryStart === 'function') mbomHistoryStart();
+
+    updateSaveButtonLabel();
     
 }
 // Drop target on the head of a process node. Kept in one place so that the undo history in
@@ -1434,18 +1451,28 @@ function insertEBOMActions(elemNodeHead, isLeaf) {
 
         addActionIcon('playlist_add', elemNodeActions)
             .addClass('item-action-add-all')
-            .attr('title', 'Add all subcomponents to MBOM')
+            .attr('title', 'Add this assembly with all its subcomponents to the MBOM, keeping its levels (Shift+click : add the subcomponents only, without the assembly level)')
             .click(function(e) {
 
                 e.stopPropagation();
                 e.preventDefault();
 
-                let elemBOM = $(this).closest('.item-head').next();
-                elemBOM.children().each(function() {
-                    if(!$(this).hasClass('match')) {
-                        $(this).find('.item-action-add:visible').click();
-                    }
-                }); 
+                // Shift+click : the original behaviour - every missing component of this assembly goes
+                // flat into the selected process (or the process with the matching code)
+                if(e.shiftKey) {
+                    let elemBOM = $(this).closest('.item-head').next();
+                    elemBOM.children().each(function() {
+                        if(!$(this).hasClass('match')) {
+                            $(this).find('.item-action-add:visible').click();
+                        }
+                    });
+                    return;
+                }
+
+                insertEBOMAssemblyAsProcess($(this).closest('.item'));
+                setStatusBar();
+                setStatusBarFilter();
+
             });
 
         addActionIcon('variable_add', elemNodeActions)
@@ -1929,15 +1956,31 @@ function getBOMNode(node, edge, level, linkEBOMRoot, icon, qty, bomType, isLeaf)
 //     return '';
     
 // }
-function insertFromEBOMToMBOM(elemAction) {
-    
+// elemTargetForced / quantity are given by insertEBOMAssemblyAsProcess only : the component then goes
+// into exactly that process, with its quantity per assembly, instead of being routed by process code or
+// the selection with its total quantity.
+function insertFromEBOMToMBOM(elemAction, elemTargetForced, quantity) {
+
     let elemItem     = elemAction.closest('.item');
     let code         = elemItem.attr('data-code');
     let elemTarget   = $('#mbom').find('.root');
     let processMatch = false;
+    let forced       = (typeof elemTargetForced !== 'undefined') && (elemTargetForced !== null) && (elemTargetForced.length > 0);
     // let category    = elemItem.attr('category');
-    
-    if(code !== '') {
+
+    if(forced) {
+        elemTarget   = elemTargetForced;
+        processMatch = true;
+    } else if(disassembleMode) {
+        // working top down : the section picked on the right wins over a matching process code
+        let elemSection = $('#mbom').find('.selected-target').not('.root').first();
+        if(elemSection.length > 0) {
+            elemTarget   = elemSection;
+            processMatch = true;
+        }
+    }
+
+    if(!processMatch && (code !== '')) {
         if($('.process').length > 0) {
             
             $('.process').each(function() {
@@ -1972,9 +2015,9 @@ function insertFromEBOMToMBOM(elemAction) {
             let tgtPartNumber = $(this).attr('data-part-number');
             
             if(srcPartNumber === tgtPartNumber) {
-                
+
                 existsInBOM = true;
-                let srcQty  = Number(elemItem.attr('data-instance-qty'));
+                let srcQty  = forced ? Number(quantity) : Number(elemItem.attr('data-instance-qty'));
                 let elemQty = $(this).find('.item-qty-input').first();
                 let tgtQty  = Number(elemQty.val()) + srcQty;
                 
@@ -2002,6 +2045,12 @@ function insertFromEBOMToMBOM(elemAction) {
             } 
             
             let elemQtyInput = clone.find('.item-qty-input');
+
+            if(forced) {
+                elemQtyInput.val(Number(quantity));
+                clone.attr('data-instance-qty', Number(quantity));
+            }
+
                 elemQtyInput.removeAttr('disabled');
                 elemQtyInput.keyup(function (e) {
                     $(this).closest('.item').attr('data-instance-qty', $(this).val());
@@ -2038,6 +2087,107 @@ function insertFromEBOMToMBOM(elemAction) {
 
     }
     
+}
+// Adds an EBOM assembly to the MBOM as a process of the same name containing its components, so the
+// EBOM levels are kept : a sub-assembly becomes a process within that process, and so on. The top
+// process goes into the selected target (or the root) with the assembly's total quantity; everything
+// inside it carries its quantity per parent, so the totals still match the EBOM.
+// As with the flat Add All, components already fully contained in the MBOM ('match') are skipped, and
+// a process is only created when at least one component goes into it.
+// The processes are new MBOM nodes, created as items at Save like the ones of Add Process. The EBOM
+// assembly itself is never inserted with children : its BOM is the EBOM, which must not be changed here.
+function insertEBOMAssemblyAsProcess(elemAssembly, elemParent, quantity) {
+
+    let isTop = (typeof elemParent === 'undefined') || (elemParent === null);
+
+    if(isTop) {
+
+        elemParent = getNewProcessParent();
+        quantity   = getEBOMInstanceQuantity(elemAssembly);
+
+        // Disassemble mode puts each new entry first, so the MBOM reads in disassembly order. Within the
+        // assembly the EBOM order is kept though : the whole structure is built in normal order, and only
+        // the finished process is moved to the front afterwards.
+        if(disassembleMode) {
+            disassembleMode = false;
+            let elemProcess;
+            try { elemProcess = insertEBOMAssemblyAsProcess(elemAssembly, elemParent, quantity); }
+            finally { disassembleMode = true; }
+            if(elemProcess) elemProcess.parent().prepend(elemProcess);
+            updateMBOMNumbers();
+            return elemProcess;
+        }
+
+    }
+
+    let title   = elemAssembly.children('.item-head').find('.item-head-descriptor').first().text().trim();
+    let elemNew = null;
+
+    let getProcess = function() {
+        // no process code : a code would make later EBOM additions with that code land in this
+        // process, and would number the new item <MBOM number>-<code>, which has to be unique
+        if(elemNew === null) elemNew = insertNewProcessNode(title, '', quantity, null, elemParent);
+        return elemNew;
+    };
+
+    elemAssembly.children('.item-bom').children('.item').each(function() {
+
+        let elemChild = $(this);
+        let qtyChild  = parseFloat(elemChild.attr('data-qty'));
+
+        if(isNaN(qtyChild)) qtyChild = 1;
+        if(elemChild.hasClass('match')) return;
+
+        if(elemChild.hasClass('item-has-bom')) {
+
+            // a sub-assembly : its own process, but only if it actually receives something
+            if(hasEBOMComponentsToAdd(elemChild)) insertEBOMAssemblyAsProcess(elemChild, getProcess(), qtyChild);
+
+        } else {
+
+            let elemAdd = elemChild.children('.item-head').find('.item-action-add').first();
+
+            if(elemAdd.length > 0) insertFromEBOMToMBOM(elemAdd, getProcess(), qtyChild);
+
+        }
+
+    });
+
+    if(isTop) updateMBOMNumbers();
+
+    return elemNew;
+
+}
+function hasEBOMComponentsToAdd(elemAssembly) {
+
+    let result = false;
+
+    elemAssembly.children('.item-bom').children('.item').each(function() {
+        let elemChild = $(this);
+        if(result || elemChild.hasClass('match')) return;
+        if(elemChild.hasClass('item-has-bom')) result = hasEBOMComponentsToAdd(elemChild);
+        else result = (elemChild.children('.item-head').find('.item-action-add').length > 0);
+    });
+
+    return result;
+
+}
+// Quantity of one EBOM row relative to the EBOM root : its own quantity times that of every assembly above
+function getEBOMInstanceQuantity(elemItem) {
+
+    let quantity = parseFloat(elemItem.attr('data-qty'));
+
+    if(isNaN(quantity)) quantity = 1;
+
+    elemItem.parents('.item-has-bom').each(function() {
+        if(this.hasAttribute('data-qty')) {
+            let factor = parseFloat($(this).attr('data-qty'));
+            if(!isNaN(factor)) quantity = quantity * factor;
+        }
+    });
+
+    return quantity;
+
 }
 function updateQuantityFromEBOMToMBOM(elemAction) {
     
@@ -2668,10 +2818,14 @@ function setTotalQuantities() {
         let elemQtyInput = $(this);
 
         if(elemQtyInput.parent().parent().siblings().length === 0) {
-            
-            let totalQuantity   = Number(elemQtyInput.val());
+
             let elemItem        = elemQtyInput.closest('.item');
             let root            = elemItem.attr('data-root');
+
+            // Starts from the quantity per parent stored on the row, NOT from the input : the input is
+            // overwritten with the total below, so a second run (after converting an EBOM, or the undo
+            // history refreshing the view) multiplied the total by the parent quantities once more.
+            let totalQuantity   = elemItem[0].hasAttribute('data-qty') ? Number(elemItem.attr('data-qty')) : Number(elemQtyInput.val());
 
             elemQtyInput.parents('.item-has-bom').each(function() {
                 if(this.hasAttribute('data-qty')) {
@@ -2718,7 +2872,9 @@ function selectProcess(elemClicked) {
     if(!isSelected) {
 
         editorResetSelection()
-        viewerResetSelection();
+
+        // in disassemble mode the reset would bring back every component already taken out of the model
+        if(disassembleMode) restoreAssembly(); else viewerResetSelection();
 
     } else {
 
@@ -2738,8 +2894,20 @@ function selectProcess(elemClicked) {
         elemClicked.addClass('selected-target');
         elemClicked.addClass('selected');
 
+        // In disassemble mode restoreAssembly decides what the model shows for the selected process :
+        // only its components, or - reversed - everything but them, so that more can be clicked into it.
         let elemBOM = elemClicked.children('.item-bom');
-        selectProcessPartsInViewer(elemBOM);
+
+        if(disassembleMode) {
+
+            // A section picked while empty is being filled : it stays reversed, so that the first
+            // component clicked into it does not switch the model over to showing only that component.
+            $('.section-adding').removeClass('section-adding');
+            if(getSelectedSectionPartNumbers().length === 0) getSelectedSection().addClass('section-adding');
+
+            restoreAssembly();
+
+        } else selectProcessPartsInViewer(elemBOM);
 
     }
 
@@ -2777,6 +2945,10 @@ function selectBOMItem(elemClicked, filter) {
         if(elemItem.hasClass('selected')) deselectItem(elemClicked);
         else selectItem(elemItem, filter);
     }
+
+    // selecting a part row isolates it in the viewer, which in disassemble mode would ghost - and so make
+    // unclickable - everything that is still to be taken apart. Process rows continue in selectProcess.
+    if(disassembleMode && !elemItem.hasClass('process')) restoreAssembly();
 
 }
 function selectItem(elemItem, filter) {   
@@ -2949,10 +3121,14 @@ function deselectItem(elemClicked) {
 
     let elemMBOM = elemClicked.closest('#mbom');
 
-    if(elemMBOM.length === 1) {
-        viewerResetSelection(false);
-    } else {
-        viewerResetSelection({ 'fitToView' : true });
+    // in disassemble mode the model is put right by restoreAssembly (selectBOMItem), and a reset here
+    // would make the camera jump back to the whole product every time a selection is cleared
+    if(!disassembleMode) {
+        if(elemMBOM.length === 1) {
+            viewerResetSelection(false);
+        } else {
+            viewerResetSelection({ 'fitToView' : true });
+        }
     }
 
     setStatusBar();
@@ -3924,10 +4100,18 @@ function onItemCreation(link) {
 // Viewer interaction
 function onViewerSelectionChanged(event) {
 
-    if(viewerHideSelected(event)) return;
-
     let panelId        = event.target.panelId;
     let viewerInstance = getViewerInstance(panelId);
+
+    // In disassemble mode a click always takes the component out of the model and into the MBOM. This is
+    // checked before the viewer's own "hide selected" toggle, which otherwise swallowed the click : the
+    // component was hidden, but never added.
+    if(disassembleMode && !viewerInstance.disableSelectEvent && (event.dbIdArray.length === 1)) {
+        if((event.mouseButton === 0) || isBlank(event.mouseButton)) disassembleViewerSelection(viewerInstance, event);
+        return;
+    }
+
+    if(viewerHideSelected(event)) return;
 
     if(viewerInstance.disableSelectEvent) return;
 
@@ -3939,21 +4123,7 @@ function onViewerSelectionChanged(event) {
 
             if(disassembleMode) {
 
-                if((event.mouseButton === 0) || isBlank(event.mouseButton)) {
-
-                    viewerInstance.disableSelectEvent = true;
-                    viewerHideModel(partNumber);
-                    viewerInstance.disableSelectEvent = false;
-                    $('#ebom').find('.item.leaf').each(function() {
-                        let elemEBOM = $(this);
-                        if(elemEBOM.attr('data-part-number') === partNumber) {
-                            let elemActionAdd = elemEBOM.find('.item-action-add').first();
-                            elemActionAdd.click();
-                            
-                        }
-                    });
-
-                }
+                // handled by disassembleViewerSelection above
 
             } else {
 
@@ -3984,6 +4154,96 @@ function onViewerSelectionChanged(event) {
         viewerResetColors({ id : 'viewer' });
 
     }
+
+}
+// Disassemble : the component clicked in the 3D model goes into the MBOM and disappears from the model.
+// The part number the model gives for the clicked object does not always name an EBOM row directly - a
+// body inside a part, or a part of a sub-assembly that is managed as one item, has none of its own. So the
+// clicked object and then its parents in the model tree are tried in turn, nearest first. A matching EBOM
+// part is added like its Add button does (every EBOM occurrence of it, as before); a matching EBOM
+// sub-assembly is added with its levels, like the Add All action. The component is hidden only when it
+// was found - previously it disappeared from the model even when nothing could be added.
+function disassembleViewerSelection(viewerInstance, event) {
+
+    // only the components of the selected section are on screen : they are in the MBOM already
+    if(isDisassembleSectionFocused()) return;
+
+    let dbId = event.dbIdArray[0];
+
+    viewerGetSelectedPartNumber(event, function(clickedNumber) {
+
+        for(let candidate of getDisassembleCandidates(viewerInstance, dbId, clickedNumber)) {
+
+            let rows = findEBOMRowsByPartNumber(candidate);
+
+            if(rows.length === 0) continue;
+
+            let open = rows.filter(function() { return !$(this).hasClass('match'); });
+
+            open.each(function() {
+                let elemRow = $(this);
+                if(elemRow.hasClass('item-has-bom')) insertEBOMAssemblyAsProcess(elemRow);
+                else elemRow.children('.item-head').find('.item-action-add').first().click();
+            });
+
+            viewerInstance.disableSelectEvent = true;
+            if(disassembleShowAdded) restoreAssembly(); else viewerHideModel(candidate, { ghosting : false });
+            viewerInstance.viewer.clearSelection();
+            viewerInstance.disableSelectEvent = false;
+
+            setStatusBar();
+            setStatusBarFilter();
+
+            return;
+
+        }
+
+        // the fixed sentences are separate text nodes and the part number is excluded from translation,
+        // so the interface translation can still match the sentences around the changing number
+        let number = $('<span></span>').text('"' + (clickedNumber || '?') + '"').attr('data-i18n-skip', '');
+
+        showErrorMessage('Component not found in the EBOM',
+            '<span>The 3D model calls the selected component</span> ' + number.prop('outerHTML') +
+            '<span>. Neither it nor any assembly above it matches the part number of an EBOM row, so it was not added to the MBOM and stays visible.</span>');
+
+    });
+
+}
+function getDisassembleCandidates(viewerInstance, dbId, clickedNumber) {
+
+    let result    = [];
+    let instances = viewerInstance.dataInstances || [];
+    let tree      = (viewerInstance.viewer && viewerInstance.viewer.model) ? viewerInstance.viewer.model.getInstanceTree() : null;
+    let rootId    = (tree !== null) ? tree.getRootId() : null;
+
+    let add = function(value) {
+        if(isBlank(value)) return;
+        value = String(value).trim();
+        if((value !== '') && !result.includes(value)) result.push(value);
+    };
+
+    add(clickedNumber);
+
+    let id = dbId;
+
+    while((tree !== null) && !isBlank(id) && (id !== rootId)) {
+        for(let instance of instances) {
+            if(instance.dbId === id) { add(instance.partNumber); break; }
+        }
+        id = tree.getNodeParentId(id);
+    }
+
+    return result;
+
+}
+function findEBOMRowsByPartNumber(partNumber) {
+
+    let key = String(partNumber).trim().toLowerCase();
+
+    // never the EBOM root : clicking the model must not add the whole product
+    return $('#ebom').find('.item').not('.root').filter(function() {
+        return (String($(this).attr('data-part-number') || '').trim().toLowerCase() === key);
+    });
 
 }
 function updateViewer() {
@@ -4046,19 +4306,98 @@ function addPartNumber(partNumbers, partsColored, elemItem, expand) {
     return result;
 
 }
+// Disassemble : what the model shows.
+//   A section is selected on the right :
+//     normal   - only the components of that section, highlighted, the rest hidden
+//     reversed - that section hidden and the rest shown, so that more can be clicked into it
+//     (a section without components has nothing to show, so it behaves as reversed)
+//   No section selected : what is still to be taken apart.
+//   The components in the MBOM outside the selected section are hidden, or with "Show parts already in
+//   MBOM" switched on stay visible and are tinted green.
 function restoreAssembly() {
 
     if(!disassembleMode) return;
 
-    viewerUnhideAll({ id : 'viewer', fitToView : false, resetColors : false, keepHidden : false });
+    let sectionParts = getSelectedSectionPartNumbers();
+
+    $('#toggle-section-reverse')
+        .toggleClass('hidden', getSelectedSection().length === 0)
+        .toggleClass('toggle-on' ,  isDisassembleSectionReversed())
+        .toggleClass('toggle-off', !isDisassembleSectionReversed());
+
+    if(isDisassembleSectionFocused()) {
+        viewerSelectModels(sectionParts);
+        disassembleTinted = true;
+        return;
+    }
+
+    // the tint of a previous state is cleared, any other coloring is left alone as before
+    viewerUnhideAll({ id : 'viewer', fitToView : false, resetColors : disassembleTinted, keepHidden : false });
+    disassembleTinted = false;
+
     let partNumbers = [];
 
     $('#mbom').find('.item').each(function() {
         let partNumber = $(this).attr('data-part-number');
-        if(partNumber !== '') partNumbers.push(partNumber);
+        // new processes carry no part number at all
+        if(!isBlank(partNumber)) partNumbers.push(partNumber);
     });
-    
-    viewerHideModels(partNumbers);
+
+    if(disassembleShowAdded) {
+        tintDisassembledModels(partNumbers.filter(function(partNumber) { return !sectionParts.includes(partNumber); }), colors.vectors.green);
+        if(sectionParts.length > 0) viewerHideModels(sectionParts, { id : 'viewer', ghosting : false });
+    } else {
+        viewerHideModels(partNumbers, { id : 'viewer', ghosting : false });
+    }
+
+}
+function isDisassembleSectionReversed() {
+
+    let elemSection = getSelectedSection();
+
+    if(elemSection.length === 0) return disassembleReverse;
+
+    return (disassembleReverse || elemSection.hasClass('section-adding') || (getSelectedSectionPartNumbers().length === 0));
+
+}
+function isDisassembleSectionFocused() {
+
+    return ((getSelectedSection().length > 0) && !isDisassembleSectionReversed());
+
+}
+// not the root : everything is inside it, so treating it as a section would say nothing
+function getSelectedSection() {
+
+    return $('#mbom').find('.selected-target').not('.root').first();
+
+}
+function getSelectedSectionPartNumbers() {
+
+    let result = [];
+
+    getSelectedSection().find('.item').each(function() {
+        let partNumber = $(this).attr('data-part-number');
+        if(!isBlank(partNumber) && !result.includes(partNumber)) result.push(partNumber);
+    });
+
+    return result;
+
+}
+function tintDisassembledModels(partNumbers, color) {
+
+    if(partNumbers.length > 0) viewerSetColors(partNumbers, { id : 'viewer', color : color, resetColors : false, unhide : false, keepHidden : true });
+
+    disassembleTinted = true;
+
+}
+function leaveDisassembleMode() {
+
+    disassembleMode = false;
+
+    if(disassembleTinted) {
+        viewerResetColors({ id : 'viewer' });
+        disassembleTinted = false;
+    }
 
 }
 
@@ -4553,9 +4892,27 @@ function updateBOMItems() {
     }
     
 }
+// The MBOM item itself is created as soon as the editor opens an EBOM that has none (createMBOMRoot).
+// What Save does is not always the same though : as long as that MBOM has no structure in Fusion Manage,
+// it writes the first one, afterwards it changes the existing one. The button says which, judged by the
+// BOM rows the MBOM root has in the database (data-edges, kept up to date by Save itself).
+function updateSaveButtonLabel() {
+
+    let elemRoot = $('#mbom-tree').children('.item').first();
+    let isNew    = isBlank(elemRoot.attr('data-edges'));
+
+    $('#save')
+        .text(isNew ? 'Create MBOM' : 'Update MBOM')
+        .attr('title', isNew
+            ? 'This MBOM has no structure in Fusion Manage yet. Writes the processes and components shown here as its first version.'
+            : 'Writes the changes made here to the existing MBOM in Fusion Manage.');
+
+}
 function endProcessing() {
 
     if(typeof mbomHistoryCheckpoint === 'function') mbomHistoryCheckpoint();
+
+    updateSaveButtonLabel();
 
     $('#confirm-saving').removeClass('disabled').addClass('default');
     $('.in-work').removeClass('in-work');

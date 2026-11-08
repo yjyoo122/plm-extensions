@@ -7,6 +7,7 @@ block head
     script(src='/javascripts/libs/jquery-ui-1.12.1/jquery-ui.min.js')
     script(src='/javascripts/apps/mbom.js')
     script(src='/javascripts/apps/mbom-history.js')
+    script(src='/javascripts/apps/mbom-layout.js')
     script(src='/javascripts/custom/mbom.js')
     script.
         config = !{JSON.stringify(config)};
@@ -56,7 +57,11 @@ block body
                     .panel-title-main#mode-operations.hidden(data-id='operations') Operations &amp; Suppliers 
 
                 .panel-content.tab-group-main.viewer#viewer.surface-level-1
-                
+
+                #disassemble-options
+                    #toggle-section-reverse.button.with-toggle.toggle-off.hidden(title="Off : shows only the parts of the selected section and hides the rest. On : hides the selected section and shows the rest, so you can click more parts into it.") Reverse section view
+                    #toggle-show-added.button.with-toggle.toggle-off(title='Off : parts already moved to the MBOM disappear from the model. On : they stay visible, tinted green.') Show parts already in MBOM
+
                 .panel-content.tab-group-main#ebom
                     #ebom-tree.no-scrollbar.pos-abs-top
                     #ebom-qty-comparison
